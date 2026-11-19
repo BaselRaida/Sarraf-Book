@@ -48,7 +48,7 @@ export default function OperationsLog() {
       if (method && o.method !== method) return false;
       if (lo && o.date < lo) return false;
       if (hi && o.date > hi) return false;
-      return !needle || o.customerName.toLowerCase().includes(needle) || (o.reference ?? '').toLowerCase().includes(needle) || (o.notes ?? '').toLowerCase().includes(needle);
+      return !needle || o.customerName.toLowerCase().includes(needle) || (o.reference ?? '').toLowerCase().includes(needle) || (o.kind ?? '').toLowerCase().includes(needle) || (o.notes ?? '').toLowerCase().includes(needle);
     });
   }, [ops, q, status, currency, method, from, to, settledByOp]);
 
@@ -62,7 +62,7 @@ export default function OperationsLog() {
       <div className="mb-3 flex gap-2">
         <div className="relative flex-1">
           <Icon name="search" size={20} className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-muted" />
-          <input className="input ps-12" placeholder="بحث بالزبون أو الرقم المرجعي" value={q} onChange={(e) => setQ(e.target.value)} type="search" />
+          <input className="input ps-12" placeholder="بحث بالزبون أو النوع أو الرقم المرجعي" value={q} onChange={(e) => setQ(e.target.value)} type="search" />
         </div>
         <button className={cx('btn-outline relative px-4', showFilters && 'border-primary')} onClick={() => setShowFilters((s) => !s)} aria-label="فلترة">
           <Icon name="filter" size={20} />
@@ -133,11 +133,11 @@ export default function OperationsLog() {
                 <Avatar name={o.customerName} size={44} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className={cx('truncate text-base font-extrabold', o.status === 'cancelled' && 'line-through')}>{o.customerName}</p>
+                    <p className={cx('truncate text-base font-bold', o.status === 'cancelled' && 'line-through')}>{o.customerName}</p>
                     {o.status === 'cancelled' && <CancelledBadge />}
                   </div>
                   <p className="truncate text-sm text-muted">
-                    {o.method} · {fmtDateTime(o.date)}
+                    {o.kind ? `${o.kind} · ` : ''}{o.method} · {fmtDateTime(o.date)}
                   </p>
                   {remaining > 0 && (
                     <p className="text-xs font-bold text-pending-ink">
@@ -146,7 +146,7 @@ export default function OperationsLog() {
                   )}
                 </div>
                 <div className="text-end">
-                  <Money value={o.amount} currency={o.currency} className="block text-base font-extrabold" />
+                  <Money value={o.amount} currency={o.currency} className="block text-base font-bold" />
                   <Money value={o.commission} currency={o.currency} tone={o.status === 'cancelled' ? 'muted' : 'income'} className="text-sm font-bold" />
                 </div>
               </button>

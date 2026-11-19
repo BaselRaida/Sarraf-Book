@@ -41,6 +41,7 @@ export interface Operation {
   date: string; // ISO
   customerId: string;
   customerName: string; // نسخة للبحث والعرض
+  kind?: string; // طبيعة الاستلام (حوالة، إيداع، كاش…) — نص حر
   method: string; // طريقة الاستلام
   reference?: string; // رقم مرجعي اختياري (hash، رقم حوالة…)
   amount: number; // المبلغ المستلم
@@ -71,6 +72,7 @@ export interface Payment {
   rate?: number; // سعر الصرف × 1e6 (عند اختلاف العملة)
   marketRate?: number; // سعر السوق × 1e6 (اختياري، لحساب ربح فرق السعر)
   fxProfit?: number; // ربح فرق السعر بعملة التحويل
+  kind?: string; // طبيعة التحويل — نص حر
   method: string; // طريقة التحويل
   reference?: string;
   notes?: string;

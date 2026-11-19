@@ -4,13 +4,13 @@
 
 /* ═══ الهوية البصرية — كل الألوان هنا فقط (قيم RGB) ═══ */
 :root {
-  --primary: 14 77 58; /* #0E4D3A أخضر نقدي عميق */
-  --primary-2: 22 118 90; /* #16765A للتدرّج */
+  --primary: 20 80 59; /* #14503B أخضر الشعار */
+  --primary-2: 29 107 79; /* #1D6B4F للتدرّج */
   --gold: 212 175 55; /* #D4AF37 ذهبي العملات */
   --gold-2: 236 205 104; /* #ECCD68 */
   --gold-ink: 42 32 5; /* #2A2005 */
   --income: 31 157 107; /* #1F9D6B */
-  --paper: 244 242 234; /* #F4F2EA */
+  --paper: 243 240 228; /* #F3F0E4 ورق البنكنوت (من الشعار) */
   --card: 255 255 255;
   --card-border: 227 232 226; /* #E3E8E2 */
   --ink: 16 42 32; /* #102A20 */
@@ -21,7 +21,7 @@
   --cancelled: 136 135 128; /* #888780 */
   --danger: 180 35 24; /* للأخطاء فقط */
   --on-primary: 247 245 236;
-  --shadow: 14 77 58;
+  --shadow: 20 80 59;
   color-scheme: light;
 }
 
@@ -48,14 +48,8 @@
 }
 
 html {
-  font-size: 17px; /* أكبر قليلاً للجوال */
+  font-size: 16px;
 }
-@media (min-width: 768px) {
-  html {
-    font-size: 16px;
-  }
-}
-
 html,
 body {
   background: rgb(var(--paper));
@@ -65,11 +59,19 @@ body {
 
 body {
   font-family: 'Cairo', system-ui, sans-serif;
-  font-weight: 500;
+  font-weight: 400;
+  line-height: 1.6;
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+/* سلّم الأوزان: 400 نص عادي · 500 نص ثانوي مهم · 600 تسميات وأزرار · 700 عناوين ومبالغ */
+h1,
+h2,
+h3 {
+  line-height: 1.35;
 }
 
 /* أرقام متساوية العرض لسهولة قراءة المبالغ */
@@ -94,7 +96,7 @@ body {
     box-shadow: 0 1px 2px rgb(var(--shadow) / 0.04), 0 6px 20px -6px rgb(var(--shadow) / 0.08);
   }
   .btn {
-    @apply inline-flex select-none items-center justify-center gap-2 rounded-2xl px-5 py-3 text-base font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-2xl px-5 py-3 text-[15px] font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-gold {
     @apply btn text-gold-ink;
@@ -111,16 +113,16 @@ body {
     @apply btn border border-danger/40 bg-card text-danger hover:bg-danger/5;
   }
   .input {
-    @apply w-full rounded-2xl border border-card-border bg-card px-4 py-3 text-lg font-semibold text-ink outline-none transition placeholder:font-normal placeholder:text-muted/50 focus:border-primary-2 focus:ring-4 focus:ring-primary-2/10;
+    @apply w-full rounded-2xl border border-card-border bg-card px-4 py-3 text-base font-medium text-ink outline-none transition placeholder:font-normal placeholder:text-muted/50 focus:border-primary-2 focus:ring-4 focus:ring-primary-2/10;
   }
   .dark .input:focus {
     @apply border-gold ring-gold/10;
   }
   .label {
-    @apply mb-1.5 block text-sm font-bold text-muted;
+    @apply mb-1.5 block text-[13px] font-semibold text-muted;
   }
   .chip {
-    @apply rounded-2xl border border-card-border bg-card px-4 py-2 text-base font-bold text-ink transition active:scale-95;
+    @apply rounded-2xl border border-card-border bg-card px-3.5 py-2 text-sm font-semibold text-ink transition active:scale-95;
   }
   .chip-on {
     @apply border-primary bg-primary text-[rgb(var(--on-primary))];
@@ -129,7 +131,7 @@ body {
     @apply border-gold bg-gold text-gold-ink;
   }
   .section-title {
-    @apply mb-3 text-lg font-extrabold text-ink;
+    @apply mb-3 text-[17px] font-bold text-ink;
   }
 }
 

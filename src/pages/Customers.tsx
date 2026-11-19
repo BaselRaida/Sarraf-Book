@@ -78,18 +78,18 @@ export default function Customers() {
               <Link key={c.id} to={`/customers/${c.id}`} className="flex items-center gap-3 px-4 py-3.5">
                 <Avatar name={c.name} size={48} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-lg font-extrabold">{c.name}</p>
+                  <p className="truncate text-lg font-bold">{c.name}</p>
                   <p className="truncate text-sm text-muted">
                     <span className="num">{s.opCount}</span> عملية · آخرها {fmtDate(last)}
                   </p>
                 </div>
                 <div className="text-end text-sm">
                   {owed.length > 0 ? (
-                    <span className="inline-block rounded-2xl bg-pending-bg px-2.5 py-1 font-extrabold text-pending-ink">
+                    <span className="inline-block rounded-2xl bg-pending-bg px-2.5 py-1 font-bold text-pending-ink">
                       له <MoneyList values={Object.fromEntries(owed)} vertical />
                     </span>
                   ) : (
-                    <span className="font-extrabold">
+                    <span className="font-bold">
                       <MoneyList values={s.profit} tone="income" vertical empty="" />
                     </span>
                   )}

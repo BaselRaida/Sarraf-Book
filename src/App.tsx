@@ -38,8 +38,8 @@ function Shell({ onLock, canLock }: { onLock: () => void; canLock: boolean }) {
       <header className="hero no-print sticky top-0 z-30">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <NavLink to="/" className="flex items-center gap-2.5">
-            <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" className="h-9 w-9 rounded-xl shadow" />
-            <span className="text-xl font-extrabold">صرّاف بوك</span>
+            <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" className="h-9 w-9 rounded-[10px] shadow-sm ring-1 ring-white/25" />
+            <span className="text-lg font-bold">صرّاف بوك</span>
           </NavLink>
           <nav className="ms-6 hidden gap-1 md:flex">
             {[...NAV, { to: '/cash', label: 'الصندوق', icon: 'wallet' }, { to: '/settings', label: 'الإعدادات', icon: 'gear' }].map((n) => (
@@ -93,10 +93,10 @@ function Shell({ onLock, canLock }: { onLock: () => void; canLock: boolean }) {
                 <span className="-mt-7 flex h-[60px] w-[60px] items-center justify-center rounded-full text-gold-ink shadow-[0_8px_20px_-6px_rgb(var(--gold)/0.8)] ring-[5px] ring-paper" style={{ background: 'linear-gradient(180deg, rgb(var(--gold-2)), rgb(var(--gold)))' }}>
                   <Icon name="plus" size={28} />
                 </span>
-                <span className="text-xs font-bold text-ink">{n.label}</span>
+                <span className="text-[11px] font-semibold text-ink">{n.label}</span>
               </NavLink>
             ) : (
-              <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => cx('flex flex-col items-center gap-0.5 rounded-2xl py-1.5 text-xs font-bold transition', isActive ? 'bg-primary/10 text-primary dark:bg-gold/15 dark:text-gold' : 'text-muted')}>
+              <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => cx('flex flex-col items-center gap-0.5 rounded-2xl py-1.5 text-[11px] font-semibold transition', isActive ? 'bg-primary/10 text-primary dark:bg-gold/15 dark:text-gold' : 'text-muted')}>
                 <Icon name={n.icon} size={23} />
                 {n.label}
               </NavLink>

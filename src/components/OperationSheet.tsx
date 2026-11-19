@@ -88,23 +88,23 @@ export default function OperationSheet({ id, onClose }: { id: string | null; onC
       <Link to={`/customers/${op.customerId}`} onClick={close} className="mb-4 flex items-center gap-3 rounded-3xl bg-card p-3">
         <Avatar name={op.customerName} />
         <div className="flex-1">
-          <p className="text-lg font-extrabold">{op.customerName}</p>
+          <p className="text-lg font-bold">{op.customerName}</p>
           <p className="text-sm text-muted">{fmtDateTime(op.date)}</p>
         </div>
         <Icon name="chevron" className="text-muted" />
       </Link>
 
       <div className="hero mb-4 rounded-3xl p-4">
-        <p className="text-sm font-bold opacity-80">استلمت عن طريق {op.method}</p>
-        <Money value={op.amount} currency={op.currency} className="text-3xl font-extrabold" />
+        <p className="text-sm font-medium opacity-85">استلمت{op.kind ? ` (${op.kind})` : ''} عن طريق {op.method}</p>
+        <Money value={op.amount} currency={op.currency} className="text-3xl font-bold" />
         <div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/15 pt-3">
           <div>
-            <p className="text-xs font-bold opacity-75">ربحي {op.commissionMode === 'percent' && op.commissionBp != null && `(${formatPercent(op.commissionBp)}%)`}</p>
-            <Money value={op.commission} currency={op.currency} className="text-lg font-extrabold text-gold" />
+            <p className="text-xs font-medium opacity-80">ربحي {op.commissionMode === 'percent' && op.commissionBp != null && `(${formatPercent(op.commissionBp)}%)`}</p>
+            <Money value={op.commission} currency={op.currency} className="text-lg font-bold text-gold" />
           </div>
           <div>
-            <p className="text-xs font-bold opacity-75">المستحق له</p>
-            <Money value={op.due} currency={op.currency} className="text-lg font-extrabold" />
+            <p className="text-xs font-medium opacity-80">المستحق له</p>
+            <Money value={op.due} currency={op.currency} className="text-lg font-bold" />
           </div>
         </div>
       </div>
@@ -115,7 +115,7 @@ export default function OperationSheet({ id, onClose }: { id: string | null; onC
         </Field>
       )}
 
-      <h3 className="mb-2 font-extrabold">التحويل له</h3>
+      <h3 className="mb-2 font-bold">التحويل له</h3>
       {(pays ?? []).length === 0 ? (
         <p className="mb-3 rounded-2xl bg-pending-bg px-3 py-2 font-bold text-pending-ink">لم يُحوَّل له شيء بعد من هذه العملية</p>
       ) : (
@@ -123,8 +123,8 @@ export default function OperationSheet({ id, onClose }: { id: string | null; onC
           {pays!.map((p) => (
             <div key={p.id} className={`rounded-2xl bg-card p-3 ${p.status === 'cancelled' ? 'opacity-50' : ''}`}>
               <div className="flex items-center justify-between">
-                <Money value={p.payoutAmount} currency={p.payoutCurrency} className="text-lg font-extrabold" />
-                {p.status === 'cancelled' ? <CancelledBadge /> : <span className="text-sm text-muted">{p.method}</span>}
+                <Money value={p.payoutAmount} currency={p.payoutCurrency} className="text-lg font-bold" />
+                {p.status === 'cancelled' ? <CancelledBadge /> : <span className="text-sm text-muted">{p.kind ? `${p.kind} · ` : ''}{p.method}</span>}
               </div>
               <p className="text-sm text-muted">
                 {p.rate ? (

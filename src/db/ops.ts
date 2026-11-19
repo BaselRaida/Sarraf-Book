@@ -34,6 +34,20 @@ export async function updateCustomer(id: string, changes: Partial<Pick<Customer,
   });
 }
 
+/** يضيف طريقة جديدة كتبها المستخدم إلى القائمة (إن لم تكن موجودة) لتظهر في المرة القادمة. */
+export async function ensureMethod(name: string, use: 'in' | 'out', database: SarrafDB = defaultDb) {
+  const n = name.trim();
+  if (!n) return;
+  const all = await database.methods.toArray();
+  const found = all.find((m) => m.name === n);
+  if (found) {
+    if (found.use !== use && found.use !== 'both') await database.methods.update(found.id, { use: 'both' });
+    if (!found.active) await database.methods.update(found.id, { active: true });
+    return;
+  }
+  await database.methods.add({ id: uid(), name: n, use, active: true, order: Math.max(0, ...all.map((m) => m.order)) + 1 });
+}
+
 // ───────── العمليات والدفعات ─────────
 
 export type OperationInput = Omit<Operation, 'id' | 'customerId' | 'customerName' | 'status' | 'createdAt' | 'updatedAt' | 'cancelledAt' | 'cancelReason'>;
@@ -153,11 +167,10 @@ export async function addCashMovement(
 }
 
 /** تحويل عملة داخل الصندوق. */
-export async function exchangeCash(from: CurrencyCode, fromAmount: number, to: CurrencyCode, toAmount: number, note: string, database: SarrafDB = defaultDb) {
+export async function exchangeCash(from: CurrencyCode, fromAmount: number, to: CurrencyCode, toAmount: number, note: string, date: string = nowIso(), database: SarrafDB = defaultDb) {
   if (from === to) throw new Error('العملتان متطابقتان');
   if (fromAmount <= 0 || toAmount <= 0) throw new Error('المبالغ يجب أن تكون موجبة');
   const groupId = uid();
-  const date = nowIso();
   await database.transaction('rw', database.movements, database.audit, async () => {
     await addMovement(database, { date, type: 'exchange_out', currency: from, amount: -fromAmount, groupId, note });
     await addMovement(database, { date, type: 'exchange_in', currency: to, amount: toAmount, groupId, note });
@@ -166,9 +179,8 @@ export async function exchangeCash(from: CurrencyCode, fromAmount: number, to: C
 }
 
 /** جرد: يسجّل الفعلي مقابل المحسوب، ويعتمد الفرق كتسوية إن طُلب. */
-export async function recordCount(currency: CurrencyCode, expected: number, actual: number, note: string, applyAdjustment: boolean, database: SarrafDB = defaultDb) {
+export async function recordCount(currency: CurrencyCode, expected: number, actual: number, note: string, applyAdjustment: boolean, date: string = nowIso(), database: SarrafDB = defaultDb) {
   const diff = actual - expected;
-  const date = nowIso();
   await database.transaction('rw', database.counts, database.movements, database.audit, async () => {
     await database.counts.add({ id: uid(), date, currency, expected, actual, diff, note, adjusted: applyAdjustment && diff !== 0 });
     if (applyAdjustment && diff !== 0) await addMovement(database, { date, type: 'adjust', currency, amount: diff, note: `تسوية جرد${note ? ' — ' + note : ''}` });

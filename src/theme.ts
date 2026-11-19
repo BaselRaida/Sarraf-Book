@@ -19,7 +19,7 @@ const mq = () => window.matchMedia('(prefers-color-scheme: dark)');
 export function applyTheme(pref: ThemePref = read()) {
   const dark = pref === 'dark' || (pref === 'system' && mq().matches);
   document.documentElement.classList.toggle('dark', dark);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#103A2C' : '#0E4D3A');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#103A2C' : '#14503B');
   return dark;
 }
 

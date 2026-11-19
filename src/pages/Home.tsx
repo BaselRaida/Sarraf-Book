@@ -66,8 +66,8 @@ export default function Home() {
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-sm font-semibold text-muted">{fmtDate(new Date().toISOString())}</p>
-        <h1 className="text-2xl font-extrabold">ملخص اليوم</h1>
+        <p className="text-sm font-medium text-muted">{fmtDate(new Date().toISOString())}</p>
+        <h1 className="text-2xl font-bold">ملخص اليوم</h1>
       </div>
 
       {needBackup && (
@@ -79,28 +79,28 @@ export default function Home() {
 
       {/* بطاقة الأرباح الرئيسية */}
       <section className="hero overflow-hidden rounded-[28px] p-5 shadow-[0_12px_30px_-12px_rgb(var(--shadow)/0.6)]">
-        <p className="text-sm font-bold opacity-80">أرباح اليوم</p>
-        <div className="mt-1 text-[2.1rem] font-extrabold leading-tight text-gold">
+        <p className="text-sm font-medium opacity-85">أرباح اليوم</p>
+        <div className="mt-1 text-[2.1rem] font-bold leading-tight text-gold">
           <MoneyList values={d.sToday.profit} empty="0" vertical />
         </div>
         <div className="mt-4 grid grid-cols-3 gap-2 border-t border-white/15 pt-4 text-center">
           <div>
-            <p className="num text-2xl font-extrabold">{d.sToday.customerCount}</p>
-            <p className="text-xs font-bold opacity-75">زبائن اليوم</p>
+            <p className="num text-2xl font-bold">{d.sToday.customerCount}</p>
+            <p className="text-xs font-medium opacity-80">زبائن اليوم</p>
           </div>
           <div>
-            <p className="num text-2xl font-extrabold">{d.sToday.opCount}</p>
-            <p className="text-xs font-bold opacity-75">عمليات</p>
+            <p className="num text-2xl font-bold">{d.sToday.opCount}</p>
+            <p className="text-xs font-medium opacity-80">عمليات</p>
           </div>
           <div>
-            <p className="num text-2xl font-extrabold">{d.payCount}</p>
-            <p className="text-xs font-bold opacity-75">تحويلات</p>
+            <p className="num text-2xl font-bold">{d.payCount}</p>
+            <p className="text-xs font-medium opacity-80">تحويلات</p>
           </div>
         </div>
         {nonZero(d.sToday.received).length > 0 && (
           <div className="mt-3 rounded-2xl bg-white/10 px-3 py-2 text-sm">
             <span className="font-bold opacity-80">استلمت اليوم: </span>
-            <MoneyList values={d.sToday.received} className="font-extrabold" />
+            <MoneyList values={d.sToday.received} className="font-bold" />
           </div>
         )}
       </section>
@@ -113,19 +113,19 @@ export default function Home() {
       <section className="grid gap-3 sm:grid-cols-2">
         <Link to="/customers?owed=1" className="card block transition hover:shadow-md">
           <div className="flex items-center justify-between">
-            <p className="font-extrabold">مستحقات للزبائن</p>
+            <p className="font-bold">مستحقات للزبائن</p>
             <span className="rounded-full bg-pending-bg px-2.5 py-0.5 text-xs font-bold text-pending-ink">
               <span className="num">{d.owingCustomers}</span> زبون
             </span>
           </div>
           <p className="mb-2 text-xs text-muted">مبالغ استلمتها ولم أحوّلها بعد</p>
-          <div className="text-xl font-extrabold">
+          <div className="text-xl font-bold">
             <MoneyList values={d.owed} empty="لا شيء ✓" vertical />
           </div>
         </Link>
         <Link to="/cash" className="card block transition hover:shadow-md">
           <div className="flex items-center justify-between">
-            <p className="font-extrabold">أرصدتي</p>
+            <p className="font-bold">أرصدتي</p>
             <Icon name="wallet" className="text-muted" />
           </div>
           <p className="mb-2 text-xs text-muted">ما معي الآن لكل عملة</p>
@@ -136,7 +136,7 @@ export default function Home() {
               {cashList.map(([c, v]) => (
                 <div key={c}>
                   <p className="text-xs text-muted">{cur(c).name}</p>
-                  <Money value={v} currency={c} className="text-lg font-extrabold" />
+                  <Money value={v} currency={c} className="text-lg font-bold" />
                 </div>
               ))}
             </div>
@@ -152,7 +152,7 @@ export default function Home() {
             التقارير ←
           </Link>
         </div>
-        <div className="mb-3 text-lg font-extrabold text-income">
+        <div className="mb-3 text-lg font-bold text-income">
           <MoneyList values={d.weekTotal} tone="income" empty="0" />
         </div>
         {chartCurrencies.length > 1 && <Chips small className="mb-3" value={cc} onChange={setChartCur} options={chartCurrencies.map((c) => ({ value: c, label: cur(c).name }))} />}
@@ -173,12 +173,12 @@ export default function Home() {
               <Link key={c.id} to={`/customers/${c.id}`} className="flex items-center gap-3 px-4 py-3">
                 <Avatar name={c.name} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-base font-extrabold">{c.name}</p>
+                  <p className="truncate text-base font-bold">{c.name}</p>
                   <p className="text-sm text-muted">
                     <span className="num">{c.count}</span> {c.count === 1 ? 'عملية' : 'عمليات'}
                   </p>
                 </div>
-                <div className="text-end font-extrabold">
+                <div className="text-end font-bold">
                   <MoneyList values={c.profit} tone="income" vertical />
                 </div>
               </Link>
@@ -201,13 +201,13 @@ export default function Home() {
               <button key={o.id} onClick={() => setOpenOp(o.id)} className={cx('flex w-full items-center gap-3 px-4 py-3 text-start', o.status === 'cancelled' && 'opacity-50')}>
                 <Avatar name={o.customerName} size={40} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-extrabold">{o.customerName}</p>
+                  <p className="truncate font-bold">{o.customerName}</p>
                   <p className="truncate text-sm text-muted">
                     {o.method} · {localDay(o.date) === today ? fmtTime(o.date) : fmtDate(o.date)}
                   </p>
                 </div>
                 <div className="text-end">
-                  <Money value={o.amount} currency={o.currency} className="block font-extrabold" />
+                  <Money value={o.amount} currency={o.currency} className="block font-bold" />
                   <Money value={o.commission} currency={o.currency} tone="income" className="text-sm font-bold" />
                 </div>
               </button>

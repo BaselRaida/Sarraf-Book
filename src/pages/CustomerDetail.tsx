@@ -50,7 +50,7 @@ export default function CustomerDetail() {
       <div className="flex items-center gap-4">
         <Avatar name={customer.name} size={64} />
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-extrabold">{customer.name}</h1>
+          <h1 className="truncate text-2xl font-bold">{customer.name}</h1>
           <p className="text-sm text-muted">
             عمولته: <span className="num font-bold text-ink">{formatPercent(customer.commissionBp ?? defaultCommissionBp)}%</span>
             {customer.phone && (
@@ -70,8 +70,8 @@ export default function CustomerDetail() {
 
       {/* الرصيد */}
       <section className={cx('rounded-[28px] p-5', owed.some(([, v]) => v > 0) ? 'hero' : 'card')}>
-        <p className="text-sm font-bold opacity-80">{owed.length === 0 ? 'الحساب صافٍ' : owed.every(([, v]) => v < 0) ? 'دفعت له زيادة' : 'الرصيد الباقي له عندي'}</p>
-        <div className={cx('mt-1 text-3xl font-extrabold', owed.some(([, v]) => v > 0) && 'text-gold')}>
+        <p className="text-sm font-medium opacity-85">{owed.length === 0 ? 'الحساب صافٍ' : owed.every(([, v]) => v < 0) ? 'دفعت له زيادة' : 'الرصيد الباقي له عندي'}</p>
+        <div className={cx('mt-1 text-3xl font-bold', owed.some(([, v]) => v > 0) && 'text-gold')}>
           <MoneyList values={Object.fromEntries(owed.map(([c, v]) => [c, Math.abs(v)]))} empty="0 ✓" vertical />
         </div>
       </section>
@@ -88,26 +88,26 @@ export default function CustomerDetail() {
       {/* الإحصاءات */}
       <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <div className="card">
-          <p className="text-sm font-bold text-muted">بعث لي</p>
-          <div className="font-extrabold">
+          <p className="text-sm font-medium text-muted">بعث لي</p>
+          <div className="font-bold">
             <MoneyList values={d.s.received} vertical />
           </div>
         </div>
         <div className="card">
-          <p className="text-sm font-bold text-muted">حوّلت له</p>
-          <div className="font-extrabold">
+          <p className="text-sm font-medium text-muted">حوّلت له</p>
+          <div className="font-bold">
             <MoneyList values={d.s.paidOut} vertical />
           </div>
         </div>
         <div className="card">
-          <p className="text-sm font-bold text-muted">ربحي منه</p>
-          <div className="font-extrabold">
+          <p className="text-sm font-medium text-muted">ربحي منه</p>
+          <div className="font-bold">
             <MoneyList values={d.s.profit} tone="income" vertical />
           </div>
         </div>
         <div className="card">
-          <p className="text-sm font-bold text-muted">عدد العمليات</p>
-          <p className="num text-2xl font-extrabold">{d.s.opCount}</p>
+          <p className="text-sm font-medium text-muted">عدد العمليات</p>
+          <p className="num text-2xl font-bold">{d.s.opCount}</p>
         </div>
       </section>
 
@@ -126,7 +126,7 @@ export default function CustomerDetail() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-extrabold">استلمت · {e.op.method}</p>
+                      <p className="font-bold">{e.op.kind || 'استلمت'} · {e.op.method}</p>
                       {e.op.status === 'cancelled' && <CancelledBadge />}
                     </div>
                     <p className="text-sm text-muted">{fmtDateTime(e.op.date)}</p>
@@ -140,7 +140,7 @@ export default function CustomerDetail() {
                       ))}
                   </div>
                   <div className="text-end">
-                    <Money value={e.op.amount} currency={e.op.currency} className="block text-lg font-extrabold" />
+                    <Money value={e.op.amount} currency={e.op.currency} className="block text-lg font-bold" />
                     <Money value={e.op.commission} currency={e.op.currency} tone="income" className="text-sm font-bold" />
                   </div>
                 </button>
@@ -151,7 +151,7 @@ export default function CustomerDetail() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-extrabold">حوّلت له · {e.pay.method}</p>
+                      <p className="font-bold">{e.pay.kind || 'حوّلت له'} · {e.pay.method}</p>
                       {e.pay.status === 'cancelled' && <CancelledBadge />}
                     </div>
                     <p className="text-sm text-muted">
@@ -160,12 +160,12 @@ export default function CustomerDetail() {
                       {e.pay.notes ? ` · ${e.pay.notes}` : ''}
                     </p>
                     {e.pay.status === 'active' && (
-                      <button className="mt-1 text-xs font-bold text-muted underline" onClick={() => setCancelPay(e.pay)}>
+                      <button className="mt-1 text-xs font-medium text-muted underline" onClick={() => setCancelPay(e.pay)}>
                         إلغاء الدفعة
                       </button>
                     )}
                   </div>
-                  <Money value={e.pay.payoutAmount} currency={e.pay.payoutCurrency} className="text-lg font-extrabold" />
+                  <Money value={e.pay.payoutAmount} currency={e.pay.payoutCurrency} className="text-lg font-bold" />
                 </div>
               ),
             )}
@@ -195,7 +195,7 @@ export default function CustomerDetail() {
           }
         >
           <p>
-            إلغاء دفعة <Money value={cancelPay.payoutAmount} currency={cancelPay.payoutCurrency} className="font-extrabold" />؟ يعود المبلغ لرصيد الزبون، وتبقى الدفعة في السجل كملغاة.
+            إلغاء دفعة <Money value={cancelPay.payoutAmount} currency={cancelPay.payoutCurrency} className="font-bold" />؟ يعود المبلغ لرصيد الزبون، وتبقى الدفعة في السجل كملغاة.
           </p>
         </Modal>
       )}

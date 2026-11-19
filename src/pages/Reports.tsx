@@ -89,18 +89,18 @@ export default function Reports() {
       sheet([['الزبون', 'عدد العمليات', 'استلمت', 'ربحي'], ...r.byCustomer.map((g) => [g.key, g.count, amountsText(g.received), amountsText(g.profit)])], [22, 12, 28, 24], 'حسب الزبون');
       sheet(
         [
-          ['التاريخ', 'الزبون', 'طريقة الاستلام', 'المبلغ', 'العملة', 'العمولة', 'المستحق له', 'رقم مرجعي', 'الحالة', 'ملاحظات'],
-          ...r.ops.map((o) => [fmtDateTime(o.date), o.customerName, o.method, plain(o.amount, o.currency), o.currency, plain(o.commission, o.currency), plain(o.due, o.currency), o.reference ?? '', o.status === 'cancelled' ? 'ملغاة' : '', [o.notes, o.cancelReason].filter(Boolean).join(' — ')]),
+          ['التاريخ', 'الزبون', 'طبيعة الاستلام', 'طريقة الاستلام', 'المبلغ', 'العملة', 'العمولة', 'المستحق له', 'رقم مرجعي', 'الحالة', 'ملاحظات'],
+          ...r.ops.map((o) => [fmtDateTime(o.date), o.customerName, o.kind ?? '', o.method, plain(o.amount, o.currency), o.currency, plain(o.commission, o.currency), plain(o.due, o.currency), o.reference ?? '', o.status === 'cancelled' ? 'ملغاة' : '', [o.notes, o.cancelReason].filter(Boolean).join(' — ')]),
         ],
-        [20, 20, 14, 12, 7, 10, 12, 16, 8, 24],
+        [20, 20, 14, 14, 12, 7, 10, 12, 16, 8, 24],
         'العمليات',
       );
       sheet(
         [
-          ['التاريخ', 'الزبون', 'طريقة التحويل', 'المبلغ', 'العملة', 'السعر', 'من رصيده', 'عملة الرصيد', 'ربح فرق السعر', 'الحالة'],
-          ...r.pays.map((p) => [fmtDateTime(p.date), p.customerName, p.method, plain(p.payoutAmount, p.payoutCurrency), p.payoutCurrency, p.rate ? Number(formatRate(p.rate)) : '', plain(p.settled, p.currency), p.currency, p.fxProfit ? plain(p.fxProfit, p.payoutCurrency) : '', p.status === 'cancelled' ? 'ملغاة' : '']),
+          ['التاريخ', 'الزبون', 'طبيعة التحويل', 'طريقة التحويل', 'المبلغ', 'العملة', 'السعر', 'من رصيده', 'عملة الرصيد', 'ربح فرق السعر', 'الحالة'],
+          ...r.pays.map((p) => [fmtDateTime(p.date), p.customerName, p.kind ?? '', p.method, plain(p.payoutAmount, p.payoutCurrency), p.payoutCurrency, p.rate ? Number(formatRate(p.rate)) : '', plain(p.settled, p.currency), p.currency, p.fxProfit ? plain(p.fxProfit, p.payoutCurrency) : '', p.status === 'cancelled' ? 'ملغاة' : '']),
         ],
-        [20, 20, 14, 12, 7, 8, 12, 8, 12, 8],
+        [20, 20, 14, 14, 12, 7, 8, 12, 8, 12, 8],
         'التحويلات',
       );
       wb.Workbook = { Views: [{ RTL: true }] };
@@ -118,12 +118,12 @@ export default function Reports() {
         {rows.map((g) => (
           <div key={g.key} className="flex items-center justify-between gap-3 py-2.5">
             <div className="min-w-0">
-              <p className="truncate font-extrabold">{g.key}</p>
+              <p className="truncate font-bold">{g.key}</p>
               <p className="text-sm text-muted">
                 <span className="num">{g.count}</span> عملية · <MoneyList values={g.received} />
               </p>
             </div>
-            <div className="text-end font-extrabold">
+            <div className="text-end font-bold">
               <MoneyList values={g.profit} tone="income" vertical />
             </div>
           </div>
@@ -184,8 +184,8 @@ export default function Reports() {
       ) : (
         <div className="space-y-4">
           <section className="hero rounded-[28px] p-5">
-            <p className="text-sm font-bold opacity-80">أرباحي في الفترة</p>
-            <div className="mt-1 text-3xl font-extrabold text-gold">
+            <p className="text-sm font-medium opacity-85">أرباحي في الفترة</p>
+            <div className="mt-1 text-3xl font-bold text-gold">
               <MoneyList values={r.s.profit} vertical />
             </div>
             {nonZero(r.s.fxProfit).length > 0 && (
@@ -195,26 +195,26 @@ export default function Reports() {
             )}
             <div className="mt-4 grid grid-cols-2 gap-2 border-t border-white/15 pt-4 text-center">
               <div>
-                <p className="num text-2xl font-extrabold">{r.s.opCount}</p>
-                <p className="text-xs font-bold opacity-75">عملية</p>
+                <p className="num text-2xl font-bold">{r.s.opCount}</p>
+                <p className="text-xs font-medium opacity-80">عملية</p>
               </div>
               <div>
-                <p className="num text-2xl font-extrabold">{r.s.customerCount}</p>
-                <p className="text-xs font-bold opacity-75">زبون</p>
+                <p className="num text-2xl font-bold">{r.s.customerCount}</p>
+                <p className="text-xs font-medium opacity-80">زبون</p>
               </div>
             </div>
           </section>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="card">
-              <p className="font-bold text-muted">استلمت</p>
-              <div className="text-xl font-extrabold">
+              <p className="font-medium text-muted">استلمت</p>
+              <div className="text-xl font-bold">
                 <MoneyList values={r.s.received} vertical />
               </div>
             </div>
             <div className="card">
-              <p className="font-bold text-muted">حوّلت للزبائن</p>
-              <div className="text-xl font-extrabold">
+              <p className="font-medium text-muted">حوّلت للزبائن</p>
+              <div className="text-xl font-bold">
                 <MoneyList values={r.s.paidOut} vertical />
               </div>
             </div>

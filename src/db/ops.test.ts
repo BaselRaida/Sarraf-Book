@@ -8,6 +8,7 @@ import {
   cancelPayment,
   createOperation,
   createPayment,
+  ensureMethod,
   exchangeCash,
   exportBackup,
   findOrCreateCustomer,
@@ -147,13 +148,15 @@ describe('الصندوق', () => {
   it('إيداع وسحب وتحويل عملة', async () => {
     await addCashMovement('deposit', 'ILS', 100000, '', undefined, db);
     await addCashMovement('withdraw', 'ILS', 5000, '', undefined, db);
-    await exchangeCash('ILS', 36000, 'USD', 10000, '', db);
+    await exchangeCash('ILS', 36000, 'USD', 10000, '', '2026-01-05T10:00:00.000Z', db);
     expect((await state()).cash).toEqual({ ILS: 59000, USD: 10000 });
-    await expect(exchangeCash('USD', 1, 'USD', 1, '', db)).rejects.toThrow();
+    await expect(exchangeCash('USD', 1, 'USD', 1, '', undefined, db)).rejects.toThrow();
+    expect((await db.movements.toArray()).filter((m) => m.groupId).every((m) => m.date === '2026-01-05T10:00:00.000Z')).toBe(true);
   });
   it('الجرد مع اعتماد الفرق', async () => {
     await addCashMovement('deposit', 'ILS', 100000, '', undefined, db);
-    expect(await recordCount('ILS', 100000, 99500, 'نقص', true, db)).toBe(-500);
+    expect(await recordCount('ILS', 100000, 99500, 'نقص', true, '2026-01-04T20:00:00.000Z', db)).toBe(-500);
+    expect((await db.counts.toArray())[0].date).toBe('2026-01-04T20:00:00.000Z');
     expect((await state()).cash.ILS).toBe(99500);
   });
 });
@@ -224,7 +227,7 @@ describe('الترحيل والنسخ الاحتياطي', () => {
 
     const v2 = new SarrafDB(name);
     await v2.open();
-    expect(v2.verno).toBe(2);
+    expect(v2.verno).toBe(3);
     const [customers, ops, pays, mv, methods, curr] = await Promise.all([
       v2.customers.toArray(),
       v2.operations.toArray(),
@@ -252,7 +255,7 @@ describe('الترحيل والنسخ الاحتياطي', () => {
     await seedIfEmpty(db);
     await createOperation('أ', op(), pay(), db);
     const backup = JSON.parse(JSON.stringify(await exportBackup(db)));
-    expect(backup.version).toBe(2);
+    expect(backup.version).toBe(3);
     const other = new SarrafDB(`restore-${++n}`);
     await importBackup(backup, other);
     expect(await other.operations.count()).toBe(1);
@@ -274,5 +277,27 @@ describe('الترحيل والنسخ الاحتياطي', () => {
     expect(await target.operations.count()).toBe(1);
     expect(await target.payments.count()).toBe(1);
     expect((await target.customers.toArray())[0].name).toBe('محمد علي');
+  });
+});
+
+describe('الطرق والنوع الحر', () => {
+  it('ensureMethod يضيف الطريقة الجديدة مرة واحدة ويوسّع استخدامها', async () => {
+    await seedIfEmpty(db);
+    const before = await db.methods.count();
+    await ensureMethod('  بنك فلسطين ', 'in', db);
+    await ensureMethod('بنك فلسطين', 'in', db);
+    expect(await db.methods.count()).toBe(before + 1);
+    const m = (await db.methods.toArray()).find((x) => x.name === 'بنك فلسطين')!;
+    expect(m).toMatchObject({ use: 'in', active: true });
+    await ensureMethod('بنك فلسطين', 'out', db);
+    expect((await db.methods.get(m.id))?.use).toBe('both');
+    await ensureMethod('   ', 'in', db);
+    expect(await db.methods.count()).toBe(before + 1);
+  });
+  it('النوع والتاريخ السابق يُحفظان مع العملية والدفعة', async () => {
+    const past = '2025-12-31T09:30:00.000Z';
+    const { op: o, payment } = await createOperation('ك', op({ date: past, kind: 'أمانة' }), pay({ date: past, kind: 'دفعة أولى' }), db);
+    expect((await db.operations.get(o.id))).toMatchObject({ date: past, kind: 'أمانة' });
+    expect((await db.payments.get(payment!.id))).toMatchObject({ date: past, kind: 'دفعة أولى' });
   });
 });

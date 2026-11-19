@@ -32,7 +32,7 @@ export function Avatar({ name, size = 44 }: { name: string; size?: number }) {
   let h = 0;
   for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return (
-    <span className="inline-flex shrink-0 items-center justify-center rounded-full font-extrabold text-white" style={{ width: size, height: size, background: AVATAR_COLORS[h % AVATAR_COLORS.length], fontSize: size * 0.42 }} aria-hidden="true">
+    <span className="inline-flex shrink-0 items-center justify-center rounded-full font-bold text-white" style={{ width: size, height: size, background: AVATAR_COLORS[h % AVATAR_COLORS.length], fontSize: size * 0.42 }} aria-hidden="true">
       {letter}
     </span>
   );
@@ -65,6 +65,77 @@ export function Chips<T extends string>({ options, value, onChange, className, s
   );
 }
 
+/**
+ * اختيار حر: أزرار للخيارات المحفوظة + خانة لكتابة أي قيمة جديدة.
+ * ما يُكتب يُحفظ ويظهر كخيار في المرة القادمة.
+ */
+export function FreeChoice({ label, value, options, onChange, placeholder, error }: { label: ReactNode; value: string; options: string[]; onChange: (v: string) => void; placeholder?: string; error?: string | null }) {
+  const custom = !!value && !options.includes(value);
+  const [typing, setTyping] = useState(custom);
+  return (
+    <div>
+      <span className="label">{label}</span>
+      <div className="flex flex-wrap gap-2">
+        {options.map((o) => (
+          <button
+            key={o}
+            type="button"
+            className={cx('chip px-3 py-1.5', value === o && !typing && 'chip-on')}
+            onClick={() => {
+              setTyping(false);
+              onChange(value === o ? '' : o);
+            }}
+          >
+            {o}
+          </button>
+        ))}
+        <button type="button" className={cx('chip px-3 py-1.5', (typing || custom) && 'chip-on')} onClick={() => setTyping(true)}>
+          ✎ أخرى
+        </button>
+      </div>
+      {(typing || custom) && <input className="input mt-2" autoFocus={typing && !custom} value={custom ? value : ''} onChange={(e) => onChange(e.target.value)} placeholder={placeholder ?? 'اكتب…'} />}
+      {error && <span className="mt-1 block text-sm font-medium text-danger">{error}</span>}
+    </div>
+  );
+}
+
+/** التاريخ والوقت لكل حركة — مع أزرار سريعة للإدخال بأثر رجعي */
+export function DateField({ value, onChange, label = 'التاريخ والوقت' }: { value: string; onChange: (v: string) => void; label?: ReactNode }) {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const local = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const today = local(new Date()).slice(0, 10);
+  const day = value.slice(0, 10);
+  const yesterday = local(new Date(Date.now() - 86_400_000)).slice(0, 10);
+  const shift = (days: number) => {
+    const d = new Date(value || Date.now());
+    d.setDate(d.getDate() + days);
+    onChange(local(d));
+  };
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="label">{label}</span>
+        {day && day < today && <span className="mb-1.5 rounded-full bg-pending-bg px-2.5 py-0.5 text-xs font-semibold text-pending-ink">بأثر رجعي</span>}
+      </div>
+      <input className="input num text-base" type="datetime-local" value={value} max={local(new Date(Date.now() + 86_400_000))} onChange={(e) => onChange(e.target.value)} />
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" className={cx('chip px-3 py-1', day === today && 'chip-on')} onClick={() => onChange(local(new Date()))}>
+          الآن
+        </button>
+        <button type="button" className={cx('chip px-3 py-1', day === yesterday && 'chip-on')} onClick={() => onChange(`${yesterday}${value.slice(10) || 'T12:00'}`)}>
+          أمس
+        </button>
+        <button type="button" className="chip px-3 py-1" onClick={() => shift(-1)} aria-label="يوم قبل">
+          − يوم
+        </button>
+        <button type="button" className="chip px-3 py-1" onClick={() => shift(1)} aria-label="يوم بعد">
+          + يوم
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** نافذة منبثقة: لوح سفلي على الجوال، ونافذة في الوسط على الشاشات الكبيرة */
 export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   useEffect(() => {
@@ -84,7 +155,7 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
       <div className={cx('sheet-up flex max-h-[92dvh] w-full flex-col rounded-t-[28px] bg-paper shadow-2xl sm:rounded-[28px]', wide ? 'sm:max-w-2xl' : 'sm:max-w-lg')} role="dialog" aria-modal="true">
         <div className="mx-auto mt-2.5 h-1.5 w-12 rounded-full bg-ink/15 sm:hidden" />
         <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-3">
-          <h2 className="text-xl font-extrabold">{title}</h2>
+          <h2 className="text-xl font-bold">{title}</h2>
           <button className="flex h-10 w-10 items-center justify-center rounded-full bg-ink/5 text-2xl leading-none text-muted hover:bg-ink/10" onClick={onClose} aria-label="إغلاق">
             ×
           </button>
@@ -104,8 +175,8 @@ export function PageTitle({ children, action, sub }: { children: ReactNode; acti
   return (
     <div className="mb-5 flex items-end justify-between gap-3">
       <div>
-        {sub && <p className="text-sm font-semibold text-muted">{sub}</p>}
-        <h1 className="text-2xl font-extrabold text-ink">{children}</h1>
+        {sub && <p className="text-sm font-medium text-muted">{sub}</p>}
+        <h1 className="text-2xl font-bold text-ink">{children}</h1>
       </div>
       {action}
     </div>

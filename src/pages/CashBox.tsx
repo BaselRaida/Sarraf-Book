@@ -4,9 +4,9 @@ import { db } from '../db/db';
 import { addCashMovement, exchangeCash, recordCount } from '../db/ops';
 import { useData } from '../data';
 import { cashBalances } from '../lib/aggregate';
-import { fmtDateTime } from '../lib/dates';
+import { fmtDateTime, fromLocalInput, toLocalInput } from '../lib/dates';
 import { formatRate, parseMoney, parseRate, convert, toInputString } from '../lib/money';
-import { Chips, Empty, Field, Modal, Money, MoneyInput, PageTitle, cx, useToast } from '../components/ui';
+import { Chips, DateField, Empty, Field, Modal, Money, MoneyInput, PageTitle, cx, useToast } from '../components/ui';
 import { Icon } from '../components/icons';
 import { useLedger } from '../hooks';
 import type { MovementType } from '../lib/types';
@@ -151,7 +151,7 @@ export default function CashBox() {
 
       {(dialog === 'deposit' || dialog === 'withdraw') && <MoveDialog type={dialog} onClose={() => setDialog(null)} balances={bal} />}
       {dialog === 'exchange' && <ExchangeDialog onClose={() => setDialog(null)} balances={bal} />}
-      {dialog === 'count' && <CountDialog onClose={() => setDialog(null)} balances={bal} codes={codes} />}
+      {dialog === 'count' && <CountDialog onClose={() => setDialog(null)} balanceAt={(iso) => cashBalances(movements.filter((m) => m.date <= iso), ops.filter((o) => o.date <= iso), payments.filter((x) => x.date <= iso))} codes={codes} />}
     </div>
   );
 }
@@ -162,10 +162,11 @@ function MoveDialog({ type, onClose, balances: bal }: { type: 'deposit' | 'withd
   const [currency, setCurrency] = useState(activeCurrencies[0]?.code ?? 'ILS');
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
+  const [date, setDate] = useState(toLocalInput());
   const v = parseMoney(amount, cur(currency).decimals);
   const save = async () => {
     if (!v || v <= 0) return toast('أدخل مبلغاً صحيحاً', 'error');
-    await addCashMovement(type, currency, v, note.trim());
+    await addCashMovement(type, currency, v, note.trim(), fromLocalInput(date));
     toast(type === 'deposit' ? 'تم الإيداع' : 'تم السحب');
     onClose();
   };
@@ -181,6 +182,7 @@ function MoveDialog({ type, onClose, balances: bal }: { type: 'deposit' | 'withd
       }
     >
       <div className="space-y-4">
+        <DateField value={date} onChange={setDate} />
         <Chips value={currency} onChange={setCurrency} options={activeCurrencies.map((c) => ({ value: c.code, label: c.name }))} />
         <Field label="المبلغ" hint={<>الرصيد الحالي: <Money value={bal[currency] ?? 0} currency={currency} /></>}>
           <MoneyInput autoFocus value={amount} onChange={(e) => setAmount(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
@@ -202,6 +204,7 @@ function ExchangeDialog({ onClose, balances: bal }: { onClose: () => void; balan
   const [rate, setRate] = useState('');
   const [toAmount, setToAmount] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [date, setDate] = useState(toLocalInput());
   const fa = parseMoney(amount, cur(from).decimals);
   const r = parseRate(rate);
   const computed = fa && r ? convert(fa, cur(from).decimals, cur(to).decimals, r) : null;
@@ -210,7 +213,7 @@ function ExchangeDialog({ onClose, balances: bal }: { onClose: () => void; balan
   const save = async () => {
     if (!fa || fa <= 0 || !ta || ta <= 0) return toast('أكمل المبالغ', 'error');
     try {
-      await exchangeCash(from, fa, to, ta, note.trim() || (r ? `سعر ${formatRate(r)}` : ''));
+      await exchangeCash(from, fa, to, ta, note.trim() || (r ? `سعر ${formatRate(r)}` : ''), fromLocalInput(date));
       toast('تم تحويل العملة');
       onClose();
     } catch (e) {
@@ -229,6 +232,9 @@ function ExchangeDialog({ onClose, balances: bal }: { onClose: () => void; balan
       }
     >
       <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <DateField value={date} onChange={setDate} />
+        </div>
         <Field label="من">
           <select
             className="input"
@@ -274,12 +280,15 @@ function ExchangeDialog({ onClose, balances: bal }: { onClose: () => void; balan
   );
 }
 
-function CountDialog({ onClose, balances: bal, codes }: { onClose: () => void; balances: Record<string, number>; codes: string[] }) {
+function CountDialog({ onClose, balanceAt, codes }: { onClose: () => void; balanceAt: (iso: string) => Record<string, number>; codes: string[] }) {
   const { cur } = useData();
   const toast = useToast();
   const [actual, setActual] = useState<Record<string, string>>({});
   const [adjust, setAdjust] = useState(true);
   const [note, setNote] = useState('');
+  const [date, setDate] = useState(toLocalInput());
+  const iso = fromLocalInput(date);
+  const bal = balanceAt(iso);
 
   const rows = codes.map((code) => {
     const expected = bal[code] ?? 0;
@@ -293,7 +302,7 @@ function CountDialog({ onClose, balances: bal, codes }: { onClose: () => void; b
   const save = async () => {
     if (invalid) return toast('يوجد مبلغ غير صالح', 'error');
     if (entered.length === 0) return toast('أدخل المبلغ الفعلي لعملة واحدة على الأقل', 'error');
-    for (const r of entered) await recordCount(r.code, r.expected, r.a!, note.trim(), adjust);
+    for (const r of entered) await recordCount(r.code, r.expected, r.a!, note.trim(), adjust, iso);
     const off = entered.filter((r) => r.diff !== 0).length;
     toast(off === 0 ? 'الجرد مطابق ✓' : `سُجّل الجرد — يوجد فرق في ${off} عملة`);
     onClose();
@@ -310,8 +319,9 @@ function CountDialog({ onClose, balances: bal, codes }: { onClose: () => void; b
         </button>
       }
     >
-      <p className="mb-3 text-sm text-muted">عُدّ النقد الموجود فعلياً وأدخله. يظهر الفرق مقارنة بالرصيد المحسوب.</p>
+      <p className="mb-3 text-sm text-muted">عُدّ النقد الموجود فعلياً وأدخله. يظهر الفرق مقارنة بالرصيد المحسوب حتى التاريخ المختار.</p>
       <div className="space-y-3">
+        <DateField label="جرد حتى" value={date} onChange={setDate} />
         {rows.map((r) => (
           <div key={r.code} className="card grid grid-cols-2 items-center gap-2 py-3">
             <div>

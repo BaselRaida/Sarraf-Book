@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, setSetting } from '../db/db';
-import { createOperation, updateCustomer, updateOperation, type OperationInput, type PaymentInput } from '../db/ops';
+import { createOperation, ensureMethod, updateCustomer, updateOperation, type OperationInput, type PaymentInput } from '../db/ops';
 import { useData } from '../data';
 import { customerBalances } from '../lib/aggregate';
 import { calcPayout, commissionOf, type PayoutMode } from '../lib/calc';
@@ -10,7 +10,7 @@ import { fromLocalInput, toLocalInput } from '../lib/dates';
 import { FX_MEMORY_KEY, recallRate, rememberRate, type FxMemory } from '../lib/fxMemory';
 import { formatPercent, formatRate, normalizeDigits, parseMoney, parsePercent, parseRate, toInputString } from '../lib/money';
 import type { CommissionMode, Customer } from '../lib/types';
-import { Avatar, Chips, Field, Money, MoneyInput, MoneyList, PageTitle, cx, useToast } from '../components/ui';
+import { Avatar, Chips, DateField, Field, FreeChoice, Money, MoneyInput, MoneyList, PageTitle, cx, useToast } from '../components/ui';
 import { Icon } from '../components/icons';
 
 // تفضيلات الإدخال السريع (على هذا الجهاز)
@@ -35,11 +35,13 @@ interface Form {
   customer: string;
   amount: string;
   currency: string;
+  kind: string;
   method: string;
   cMode: CommissionMode;
   cValue: string; // نسبة "2" أو مبلغ "15"
   payMode: PayoutMode;
   payCurrency: string;
+  payKind: string;
   payMethod: string;
   rate: string;
   marketRate: string;
@@ -72,11 +74,13 @@ export default function NewOperation() {
       customer: '',
       amount: '',
       currency,
+      kind: '',
       method: pick(prefs.method, inMethods.map((m) => m.name)) ?? '',
       cMode: 'percent',
       cValue: formatPercent(defaultCommissionBp),
       payMode: prefs.payoutMode ?? 'full',
       payCurrency: prefs.payoutCurrency?.[currency] ?? currency,
+      payKind: '',
       payMethod: pick(prefs.payoutMethod, outMethods.map((m) => m.name)) ?? '',
       rate: '',
       marketRate: '',
@@ -92,6 +96,7 @@ export default function NewOperation() {
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [suggest, setSuggest] = useState(false);
+  const [dateTouched, setDateTouched] = useState(false); // تاريخ اختاره المستخدم (إدخال بأثر رجعي)
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((s) => ({ ...s, [k]: v }));
 
   /** يملأ سعر الصرف من آخر استخدام لنفس زوج العملات */
@@ -135,11 +140,13 @@ export default function NewOperation() {
       customer: existing.customerName,
       amount: toInputString(existing.amount, d),
       currency: existing.currency,
+      kind: existing.kind ?? '',
       method: existing.method,
       cMode: existing.commissionMode,
       cValue: existing.commissionMode === 'percent' && existing.commissionBp != null ? formatPercent(existing.commissionBp) : toInputString(existing.commission, d),
       payMode: !p ? 'later' : p.settled === existing.due ? 'full' : 'partial',
       payCurrency: p?.payoutCurrency ?? existing.currency,
+      payKind: p?.kind ?? '',
       payMethod: p?.method ?? outMethods[0]?.name ?? '',
       rate: p?.rate ? formatRate(p.rate) : '',
       marketRate: p?.marketRate ? formatRate(p.marketRate) : '',
@@ -188,11 +195,11 @@ export default function NewOperation() {
   const errors = {
     customer: !name ? 'اكتب اسم الزبون' : null,
     amount: amount == null || amount <= 0 ? (f.amount ? `مبلغ غير صالح (حتى ${c.decimals} خانات عشرية)` : 'أدخل المبلغ') : null,
-    method: !f.method ? 'اختر طريقة الاستلام' : null,
+    method: !f.method.trim() ? 'اختر أو اكتب طريقة الاستلام' : null,
     commission: f.cMode === 'percent' ? (cBp == null || cBp < 0 || cBp > 10000 ? 'نسبة غير صالحة' : null) : cFixed == null || cFixed < 0 ? 'مبلغ غير صالح' : null,
     rate: f.payMode !== 'later' && !same && !rate ? 'أدخل سعر التحويل' : showMarket && f.marketRate && !marketRate ? 'سعر غير صالح' : null,
     partial: f.payMode === 'partial' && (partial == null || partial <= 0) ? 'أدخل المبلغ المحوَّل' : null,
-    payMethod: f.payMode !== 'later' && !f.payMethod ? 'اختر طريقة التحويل' : null,
+    payMethod: f.payMode !== 'later' && !f.payMethod.trim() ? 'اختر أو اكتب طريقة التحويل' : null,
   };
   const hasError = Object.values(errors).some(Boolean);
   const err = (k: keyof typeof errors) => (submitted ? errors[k] : null);
@@ -203,7 +210,8 @@ export default function NewOperation() {
     if (hasError || amount == null) return toast('أكمل الحقول المطلوبة', 'error');
     const op: OperationInput = {
       date: fromLocalInput(f.date),
-      method: f.method,
+      kind: f.kind.trim() || undefined,
+      method: f.method.trim(),
       reference: f.reference.trim() || undefined,
       amount,
       currency: f.currency,
@@ -225,10 +233,14 @@ export default function NewOperation() {
             rate: same ? undefined : rate!,
             marketRate: marketRate ?? undefined,
             fxProfit: payout.fxProfit || undefined,
-            method: f.payMethod,
+            kind: f.payKind.trim() || undefined,
+            method: f.payMethod.trim(),
           };
     setSaving(true);
     try {
+      // ما كتبه المستخدم من طرق جديدة يُضاف للقائمة
+      await ensureMethod(op.method, 'in');
+      if (pay) await ensureMethod(pay.method, 'out');
       let customerId: string;
       if (editing) {
         await updateOperation(id!, name, op, pay);
@@ -251,7 +263,8 @@ export default function NewOperation() {
           payoutMethod: f.payMode !== 'later' ? f.payMethod : prefs.payoutMethod,
         });
         toast(`حُفظت عملية ${name} ✓`);
-        setF({ ...blank(), currency: f.currency, method: f.method, payCurrency: f.payCurrency, payMethod: f.payMethod, rate: f.rate, marketRate: f.marketRate });
+        // التاريخ المختار يدوياً يبقى للعملية التالية (لتسهيل إدخال الحركات القديمة)
+        setF({ ...blank(), currency: f.currency, kind: f.kind, method: f.method.trim(), payCurrency: f.payCurrency, payKind: f.payKind, payMethod: f.payMethod.trim(), rate: f.rate, marketRate: f.marketRate, date: dateTouched ? f.date : toLocalInput() });
         setSubmitted(false);
         setMore(false);
         customerRef.current?.focus();
@@ -267,6 +280,10 @@ export default function NewOperation() {
   if (editing && existing?.status === 'cancelled') return <p className="text-muted">لا يمكن تعديل عملية ملغاة.</p>;
 
   const sym = (code: string) => cur(code).symbol;
+  // اقتراحات «الطبيعة»: ما استخدمته سابقاً + بدايات افتراضية
+  const used = (vals: (string | undefined)[], starters: string[]) => [...new Set([...vals.filter((v): v is string => !!v), ...starters])].slice(0, 8);
+  const inKinds = used((allOps ?? []).map((o) => o.kind), ['حوالة', 'إيداع', 'كاش', 'أمانة']);
+  const outKinds = used((allPays ?? []).map((p) => p.kind), ['تحويل', 'تسليم كاش', 'دفعة']);
 
   return (
     <form onSubmit={submit} noValidate className="mx-auto max-w-2xl">
@@ -274,6 +291,17 @@ export default function NewOperation() {
 
       <div className="grid gap-4 md:grid-cols-[1fr_280px]">
         <div className="space-y-4">
+          {/* التاريخ — ظاهر دائماً للإدخال بأثر رجعي */}
+          <section className="card">
+            <DateField
+              value={f.date}
+              onChange={(v) => {
+                set('date', v);
+                setDateTouched(true);
+              }}
+            />
+          </section>
+
           {/* ١. الزبون */}
           <section className="card">
             <Field label="الزبون" error={err('customer')}>
@@ -312,27 +340,24 @@ export default function NewOperation() {
 
           {/* ٢. استلمت */}
           <section className="card space-y-4">
-            <h2 className="flex items-center gap-2 text-lg font-extrabold">
+            <h2 className="flex items-center gap-2 text-lg font-bold">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-income/15 text-income">
                 <Icon name="inbox" size={18} />
               </span>
               استلمت منه
             </h2>
             <Field label="المبلغ" error={err('amount')}>
-              <MoneyInput ref={amountRef} value={f.amount} onChange={(e) => set('amount', e.target.value)} placeholder="0" className="text-3xl font-extrabold" />
+              <MoneyInput ref={amountRef} value={f.amount} onChange={(e) => set('amount', e.target.value)} placeholder="0" className="text-3xl font-bold" />
             </Field>
             <Chips value={f.currency} onChange={(v) => setF((s) => withRate({ ...s, currency: v, payCurrency: prefs.payoutCurrency?.[v] ?? (s.payCurrency === s.currency ? v : s.payCurrency) }))} options={activeCurrencies.map((x) => ({ value: x.code, label: x.name }))} />
-            <div>
-              <span className="label">عن طريق</span>
-              <Chips small value={f.method} onChange={(v) => set('method', v)} options={inMethods.map((m) => ({ value: m.name, label: m.name }))} />
-              {err('method') && <span className="mt-1 block text-sm text-danger">{err('method')}</span>}
-            </div>
+            <FreeChoice label="طبيعة الاستلام" value={f.kind} options={inKinds} onChange={(v) => set('kind', v)} placeholder="مثلاً: حوالة، أمانة، سداد…" />
+            <FreeChoice label="عن طريق" value={f.method} options={inMethods.map((m) => m.name)} onChange={(v) => set('method', v)} placeholder="مثلاً: بنك فلسطين، محفظة جوال…" error={err('method')} />
           </section>
 
           {/* ٣. العمولة */}
           <section className="card">
             <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-lg font-extrabold">عمولتي</h2>
+              <h2 className="text-lg font-bold">عمولتي</h2>
               <Chips
                 small
                 value={f.cMode}
@@ -348,8 +373,8 @@ export default function NewOperation() {
                 <MoneyInput value={f.cValue} onChange={(e) => set('cValue', e.target.value)} className="text-xl" />
               </Field>
               <div className="rounded-2xl bg-income/10 px-3 py-2.5">
-                <p className="text-xs font-bold text-muted">ربحي</p>
-                <Money value={commission} currency={f.currency} tone="income" className="text-xl font-extrabold" />
+                <p className="text-xs font-medium text-muted">ربحي</p>
+                <Money value={commission} currency={f.currency} tone="income" className="text-xl font-bold" />
               </div>
             </div>
             {f.cMode === 'percent' && <p className="mt-2 text-xs text-muted">تُحفظ هذه النسبة لهذا الزبون للمرة القادمة</p>}
@@ -357,7 +382,7 @@ export default function NewOperation() {
 
           {/* ٤. حوّلت له */}
           <section className="card space-y-4">
-            <h2 className="flex items-center gap-2 text-lg font-extrabold">
+            <h2 className="flex items-center gap-2 text-lg font-bold">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary-2 dark:text-gold">
                 <Icon name="send" size={18} />
               </span>
@@ -378,11 +403,8 @@ export default function NewOperation() {
                   <span className="label">بعملة</span>
                   <Chips small value={f.payCurrency} onChange={(v) => setF((s) => withRate({ ...s, payCurrency: v }))} options={activeCurrencies.map((x) => ({ value: x.code, label: x.name }))} />
                 </div>
-                <div>
-                  <span className="label">عن طريق</span>
-                  <Chips small value={f.payMethod} onChange={(v) => set('payMethod', v)} options={outMethods.map((m) => ({ value: m.name, label: m.name }))} />
-                  {err('payMethod') && <span className="mt-1 block text-sm text-danger">{err('payMethod')}</span>}
-                </div>
+                <FreeChoice label="طبيعة التحويل" value={f.payKind} options={outKinds} onChange={(v) => set('payKind', v)} placeholder="مثلاً: دفعة، تسليم باليد…" />
+                <FreeChoice label="عن طريق" value={f.payMethod} options={outMethods.map((m) => m.name)} onChange={(v) => set('payMethod', v)} placeholder="مثلاً: بنك القدس، كاش…" error={err('payMethod')} />
                 <div className="grid grid-cols-2 gap-3">
                   {!same && (
                     <Field label={`السعر: 1 ${sym(f.currency)} =`} error={err('rate')} hint={recallRate(fxMemo, f.currency, f.payCurrency) ? 'آخر سعر استخدمته' : undefined}>
@@ -401,7 +423,7 @@ export default function NewOperation() {
                       <MoneyInput value={f.marketRate} onChange={(e) => set('marketRate', e.target.value)} />
                     </Field>
                   ) : (
-                    <button type="button" className="text-sm font-bold text-muted underline" onClick={() => setShowMarket(true)}>
+                    <button type="button" className="text-sm font-medium text-muted underline" onClick={() => setShowMarket(true)}>
                       + سعر السوق (لحساب ربح فرق السعر)
                     </button>
                   ))}
@@ -410,13 +432,10 @@ export default function NewOperation() {
           </section>
 
           <button type="button" className="btn-ghost w-full" onClick={() => setMore((m) => !m)}>
-            {more ? 'إخفاء التفاصيل ▲' : 'تاريخ، رقم مرجعي، ملاحظات ▼'}
+            {more ? 'إخفاء التفاصيل ▲' : 'رقم مرجعي، ملاحظات ▼'}
           </button>
           {more && (
             <section className="card grid gap-4 sm:grid-cols-2">
-              <Field label="التاريخ والوقت">
-                <input className="input num text-base" type="datetime-local" value={f.date} onChange={(e) => set('date', e.target.value)} />
-              </Field>
               <Field label="رقم مرجعي (اختياري)">
                 <input className="input num text-left" dir="ltr" value={f.reference} onChange={(e) => set('reference', e.target.value)} placeholder="TxID / رقم الحوالة" />
               </Field>
@@ -430,28 +449,28 @@ export default function NewOperation() {
         {/* الملخص */}
         <aside className="space-y-3 md:sticky md:top-24 md:self-start">
           <div className="hero rounded-[28px] p-5">
-            <p className="text-sm font-bold opacity-80">ملخص العملية {name && `· ${name}`}</p>
+            <p className="text-sm font-medium opacity-85">ملخص العملية {name && `· ${name}`}</p>
             <dl className="mt-3 space-y-2 text-base">
               <div className="flex justify-between gap-2">
                 <dt className="opacity-80">استلمت</dt>
-                <dd className="font-extrabold">{amount ? <Money value={amount} currency={f.currency} /> : '—'}</dd>
+                <dd className="font-bold">{amount ? <Money value={amount} currency={f.currency} /> : '—'}</dd>
               </div>
               <div className="flex justify-between gap-2">
                 <dt className="opacity-80">ربحي</dt>
-                <dd className="font-extrabold text-gold">
+                <dd className="font-bold text-gold">
                   <Money value={commission} currency={f.currency} />
                 </dd>
               </div>
               <div className="flex justify-between gap-2 border-t border-white/15 pt-2">
                 <dt className="opacity-80">المستحق له</dt>
-                <dd className="font-extrabold">
+                <dd className="font-bold">
                   <Money value={due} currency={f.currency} />
                 </dd>
               </div>
               {f.payMode !== 'later' && payout.ok && (
                 <div className="flex justify-between gap-2">
                   <dt className="opacity-80">حوّلت له</dt>
-                  <dd className="text-xl font-extrabold">
+                  <dd className="text-xl font-bold">
                     <Money value={payout.payoutAmount} currency={f.payCurrency} />
                   </dd>
                 </div>
@@ -459,21 +478,21 @@ export default function NewOperation() {
               {payout.fxProfit !== 0 && (
                 <div className="flex justify-between gap-2">
                   <dt className="opacity-80">ربح فرق السعر</dt>
-                  <dd className="font-extrabold text-gold">
+                  <dd className="font-bold text-gold">
                     <Money value={payout.fxProfit} currency={f.payCurrency} />
                   </dd>
                 </div>
               )}
               <div className={cx('flex justify-between gap-2 rounded-2xl px-3 py-2', payout.remaining !== 0 ? 'bg-gold/20' : 'bg-white/10')}>
                 <dt className="font-bold">{payout.remaining < 0 ? 'دفعت له زيادة' : 'الباقي له'}</dt>
-                <dd className="font-extrabold">
+                <dd className="font-bold">
                   <Money value={Math.abs(payout.remaining)} currency={f.currency} />
                 </dd>
               </div>
             </dl>
             {customer && Object.values(prevBalance).some((v) => v !== 0) && (
               <p className="mt-2 text-sm opacity-90">
-                رصيده الكلي بعد العملية: <MoneyList values={newBalance} className="font-extrabold" />
+                رصيده الكلي بعد العملية: <MoneyList values={newBalance} className="font-bold" />
               </p>
             )}
           </div>

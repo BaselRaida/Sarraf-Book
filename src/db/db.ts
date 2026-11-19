@@ -41,6 +41,8 @@ export class SarrafDB extends Dexie {
         methods: 'id, name, order',
       })
       .upgrade(migrateV1toV2);
+    // الإصدار 3: حقل kind (طبيعة الاستلام/التحويل) اختياري وغير مفهرس — لا تغيير في البيانات القائمة
+    this.version(3).stores({});
   }
 }
 
