@@ -1,0 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ═══ الهوية البصرية — كل الألوان هنا فقط (قيم RGB) ═══ */
+:root {
+  --primary: 14 77 58; /* #0E4D3A أخضر نقدي عميق */
+  --primary-2: 22 118 90; /* #16765A للتدرّج */
+  --gold: 212 175 55; /* #D4AF37 ذهبي العملات */
+  --gold-2: 236 205 104; /* #ECCD68 */
+  --gold-ink: 42 32 5; /* #2A2005 */
+  --income: 31 157 107; /* #1F9D6B */
+  --paper: 244 242 234; /* #F4F2EA */
+  --card: 255 255 255;
+  --card-border: 227 232 226; /* #E3E8E2 */
+  --ink: 16 42 32; /* #102A20 */
+  --muted: 95 111 103; /* #5F6F67 */
+  --pending-bg: 250 238 199; /* #FAEEC7 */
+  --pending-ink: 122 90 12; /* #7A5A0C */
+  --paid: 31 157 107;
+  --cancelled: 136 135 128; /* #888780 */
+  --danger: 180 35 24; /* للأخطاء فقط */
+  --on-primary: 247 245 236;
+  --shadow: 14 77 58;
+  color-scheme: light;
+}
+
+.dark {
+  --primary: 16 58 44; /* #103A2C */
+  --primary-2: 24 84 64;
+  --gold: 227 195 90; /* #E3C35A */
+  --gold-2: 240 214 128;
+  --gold-ink: 42 32 5;
+  --income: 91 199 149; /* #5BC795 */
+  --paper: 10 22 17; /* #0A1611 */
+  --card: 19 37 29; /* #13251D */
+  --card-border: 34 57 46;
+  --ink: 232 240 236;
+  --muted: 157 179 168;
+  --pending-bg: 74 58 16;
+  --pending-ink: 243 212 122;
+  --paid: 91 199 149;
+  --cancelled: 136 135 128;
+  --danger: 249 112 102;
+  --on-primary: 232 240 236;
+  --shadow: 0 0 0;
+  color-scheme: dark;
+}
+
+html {
+  font-size: 17px; /* أكبر قليلاً للجوال */
+}
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+html,
+body {
+  background: rgb(var(--paper));
+  color: rgb(var(--ink));
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: 'Cairo', system-ui, sans-serif;
+  font-weight: 500;
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* أرقام متساوية العرض لسهولة قراءة المبالغ */
+.num {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* خلفية خضراء بتدرّج ونقش guilloche خفيف جداً */
+.hero {
+  background-color: rgb(var(--primary));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='48' viewBox='0 0 160 48'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.06' stroke-width='1'%3E%3Cpath d='M0 24 Q20 0 40 24 T80 24 T120 24 T160 24'/%3E%3Cpath d='M0 24 Q20 48 40 24 T80 24 T120 24 T160 24'/%3E%3Cpath d='M0 12 Q20 36 40 12 T80 12 T120 12 T160 12'/%3E%3Cpath d='M0 36 Q20 12 40 36 T80 36 T120 36 T160 36'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(135deg, rgb(var(--primary)) 0%, rgb(var(--primary-2)) 100%);
+  color: rgb(var(--on-primary));
+}
+
+@layer components {
+  .card {
+    @apply rounded-3xl border border-card-border bg-card p-4;
+    box-shadow: 0 1px 2px rgb(var(--shadow) / 0.04), 0 6px 20px -6px rgb(var(--shadow) / 0.08);
+  }
+  .btn {
+    @apply inline-flex select-none items-center justify-center gap-2 rounded-2xl px-5 py-3 text-base font-bold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-gold {
+    @apply btn text-gold-ink;
+    background: linear-gradient(180deg, rgb(var(--gold-2)) 0%, rgb(var(--gold)) 100%);
+    box-shadow: 0 6px 16px -6px rgb(var(--gold) / 0.7);
+  }
+  .btn-outline {
+    @apply btn border border-card-border bg-card text-ink hover:bg-paper;
+  }
+  .btn-ghost {
+    @apply btn text-muted hover:bg-ink/5;
+  }
+  .btn-danger {
+    @apply btn border border-danger/40 bg-card text-danger hover:bg-danger/5;
+  }
+  .input {
+    @apply w-full rounded-2xl border border-card-border bg-card px-4 py-3 text-lg font-semibold text-ink outline-none transition placeholder:font-normal placeholder:text-muted/50 focus:border-primary-2 focus:ring-4 focus:ring-primary-2/10;
+  }
+  .dark .input:focus {
+    @apply border-gold ring-gold/10;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-bold text-muted;
+  }
+  .chip {
+    @apply rounded-2xl border border-card-border bg-card px-4 py-2 text-base font-bold text-ink transition active:scale-95;
+  }
+  .chip-on {
+    @apply border-primary bg-primary text-[rgb(var(--on-primary))];
+  }
+  .dark .chip-on {
+    @apply border-gold bg-gold text-gold-ink;
+  }
+  .section-title {
+    @apply mb-3 text-lg font-extrabold text-ink;
+  }
+}
+
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.sheet-up {
+  animation: sheet-up 0.22s ease-out;
+}
+
+/* الطباعة */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #999 !important;
+    break-inside: avoid;
+  }
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+}
+.print-only {
+  display: none;
+}
