@@ -1,17 +1,17 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, setSetting } from '../db/db';
 import { createOperation, ensureMethod, updateCustomer, updateOperation, type OperationInput, type PaymentInput } from '../db/ops';
 import { useData } from '../data';
 import { customerBalances } from '../lib/aggregate';
-import { calcPayout, commissionOf, type PayoutMode } from '../lib/calc';
-import { fmtDateTime, fromLocalInput, toLocalInput } from '../lib/dates';
+import { calcPayout, commissionOf, deriveRate, type PayoutMode } from '../lib/calc';
+import { fromLocalInput, toLocalInput } from '../lib/dates';
 import { useDraft } from '../lib/draft';
 import { FX_MEMORY_KEY, recallRate, rememberRate, type FxMemory } from '../lib/fxMemory';
 import { formatPercent, formatRate, normalizeDigits, parseMoney, parsePercent, parseRate, toInputString } from '../lib/money';
 import type { CommissionMode, Customer } from '../lib/types';
-import { Avatar, Chips, DateField, Field, FreeChoice, Money, MoneyInput, MoneyList, PageTitle, cx, useToast } from '../components/ui';
+import { Avatar, Chips, DateField, DraftNotice, Field, FreeChoice, Money, MoneyInput, MoneyList, PageTitle, cx, useToast } from '../components/ui';
 import { Icon } from '../components/icons';
 
 // تفضيلات الإدخال السريع (على هذا الجهاز)
@@ -34,22 +34,55 @@ const savePrefs = (p: Prefs) => {
 
 interface Form {
   customer: string;
-  amount: string;
+  amount: string; // ما وصلني
   currency: string;
-  kind: string;
-  method: string;
+  kind: string; // وصف اختياري لما وصلني
+  method: string; // نوع/طريقة ما وصلني
   cMode: CommissionMode;
   cValue: string; // نسبة "2" أو مبلغ "15"
   payMode: PayoutMode;
   payCurrency: string;
   payKind: string;
-  payMethod: string;
-  rate: string;
+  payMethod: string; // نوع/طريقة التحويل
+  rate: string; // السعر: 1 من عملة الاستلام = ؟ من عملة التحويل
+  payAmount: string; // المبلغ الذي حوّلته (يُكتب بدل السعر، أو للجزء)
   marketRate: string;
-  partial: string;
   date: string;
   reference: string;
   notes: string;
+}
+
+/** بطاقة قسم برأس ملوّن ورقم الخطوة */
+function Step({ n, title, icon, tone, children, aside }: { n: number; title: string; icon: string; tone: 'in' | 'out' | 'plain'; children: ReactNode; aside?: ReactNode }) {
+  const toneCls = tone === 'in' ? 'bg-income/12 text-income' : tone === 'out' ? 'bg-gold/20 text-pending-ink dark:text-gold' : 'bg-primary/10 text-primary-2 dark:text-gold';
+  return (
+    <section className="card space-y-4">
+      <div className="flex items-center gap-2.5">
+        <span className={cx('flex h-9 w-9 shrink-0 items-center justify-center rounded-full', toneCls)}>
+          <Icon name={icon} size={19} />
+        </span>
+        <h2 className="flex-1 text-[17px] font-bold">
+          <span className="num me-1.5 text-sm font-semibold text-muted">{n}.</span>
+          {title}
+        </h2>
+        {aside}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** سطر في إيصال الملخص */
+function Line({ label, value, sub, strong, tone }: { label: ReactNode; value: ReactNode; sub?: ReactNode; strong?: boolean; tone?: 'gold' | 'dim' }) {
+  return (
+    <div className="flex items-start justify-between gap-3 py-1.5">
+      <dt className={cx('text-sm', tone === 'dim' ? 'opacity-70' : 'opacity-85')}>{label}</dt>
+      <dd className="text-end">
+        <div className={cx(strong ? 'text-lg font-bold' : 'font-semibold', tone === 'gold' && 'text-gold')}>{value}</div>
+        {sub && <div className="text-xs opacity-75">{sub}</div>}
+      </dd>
+    </div>
+  );
 }
 
 export default function NewOperation() {
@@ -84,8 +117,8 @@ export default function NewOperation() {
       payKind: '',
       payMethod: pick(prefs.payoutMethod, outMethods.map((m) => m.name)) ?? '',
       rate: '',
+      payAmount: '',
       marketRate: '',
-      partial: '',
       date: toLocalInput(),
       reference: '',
       notes: '',
@@ -94,6 +127,8 @@ export default function NewOperation() {
   const [f, setF] = useState<Form>(blank);
   const [more, setMore] = useState(false);
   const [showMarket, setShowMarket] = useState(false);
+  const [showInKind, setShowInKind] = useState(false);
+  const [showOutKind, setShowOutKind] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [saving, setSaving] = useState(false);
   const [suggest, setSuggest] = useState(false);
@@ -106,12 +141,12 @@ export default function NewOperation() {
     'new-operation',
     draftValue,
     (d) => {
-      setF((s) => ({ ...s, ...d.f }));
+      setF((s) => ({ ...s, ...d.f, payAmount: d.f.payAmount ?? '' }));
       setDateTouched(!!d.dateTouched);
       setMore(!!d.more);
       setShowMarket(!!d.showMarket);
     },
-    (d) => !!(d?.f && (d.f.customer.trim() || d.f.amount.trim() || d.f.reference.trim() || d.f.notes.trim() || d.f.partial.trim())),
+    (d) => !!(d?.f && (d.f.customer?.trim() || d.f.amount?.trim() || d.f.reference?.trim() || d.f.notes?.trim() || d.f.payAmount?.trim())),
     !editing,
   );
   const discardDraft = () => {
@@ -126,9 +161,9 @@ export default function NewOperation() {
 
   /** يملأ سعر الصرف من آخر استخدام لنفس زوج العملات */
   const withRate = (s: Form): Form => {
-    if (s.payCurrency === s.currency) return { ...s, rate: '', marketRate: '' };
+    if (s.payCurrency === s.currency) return { ...s, rate: '', marketRate: '', payAmount: s.payMode === 'partial' ? s.payAmount : '' };
     const m = recallRate(fxMemo, s.currency, s.payCurrency);
-    return { ...s, rate: m ? formatRate(m.payoutRate) : '', marketRate: m?.marketRate ? formatRate(m.marketRate) : '' };
+    return { ...s, rate: m ? formatRate(m.payoutRate) : '', marketRate: m?.marketRate ? formatRate(m.marketRate) : '', payAmount: s.payMode === 'partial' ? s.payAmount : '' };
   };
 
   // أول تحميل: سعر الصرف المحفوظ + زبون من الرابط
@@ -162,6 +197,7 @@ export default function NewOperation() {
     const d = cur(existing.currency).decimals;
     const p = existingPay;
     const pd = p ? cur(p.payoutCurrency).decimals : 2;
+    const full = !!p && p.settled === existing.due;
     setF({
       customer: existing.customerName,
       amount: toInputString(existing.amount, d),
@@ -170,18 +206,21 @@ export default function NewOperation() {
       method: existing.method,
       cMode: existing.commissionMode,
       cValue: existing.commissionMode === 'percent' && existing.commissionBp != null ? formatPercent(existing.commissionBp) : toInputString(existing.commission, d),
-      payMode: !p ? 'later' : p.settled === existing.due ? 'full' : 'partial',
+      payMode: !p ? 'later' : full ? 'full' : 'partial',
       payCurrency: p?.payoutCurrency ?? existing.currency,
       payKind: p?.kind ?? '',
       payMethod: p?.method ?? outMethods[0]?.name ?? '',
       rate: p?.rate ? formatRate(p.rate) : '',
+      // المبلغ المحفوظ يُعرض كما هو (لا يُعاد حسابه من السعر)
+      payAmount: p && (!full || p.payoutCurrency !== existing.currency) ? toInputString(p.payoutAmount, pd) : '',
       marketRate: p?.marketRate ? formatRate(p.marketRate) : '',
-      partial: p && p.settled !== existing.due ? toInputString(p.payoutAmount, pd) : '',
       date: toLocalInput(existing.date),
       reference: existing.reference ?? '',
       notes: existing.notes ?? '',
     });
     setShowMarket(!!p?.marketRate);
+    setShowInKind(!!existing.kind);
+    setShowOutKind(!!p?.kind);
     setMore(!!(existing.reference || existing.notes));
   }, [existing, existingPay, cur, outMethods]);
 
@@ -194,7 +233,7 @@ export default function NewOperation() {
     const list = q ? customers.filter((c) => c.name.toLowerCase().includes(q) || (c.phone ?? '').includes(q)) : customers;
     return list.filter((c) => c.name !== name).slice(0, 6);
   }, [customers, name]);
-  const balances = useMemo(() => customerBalances((allOps ?? []).filter((o) => o.id !== id), (allPays ?? []).filter((p) => p.operationId !== id || !id)), [allOps, allPays, id]);
+  const balances = useMemo(() => customerBalances((allOps ?? []).filter((o) => o.id !== id), (allPays ?? []).filter((p) => !id || p.operationId !== id)), [allOps, allPays, id]);
   const prevBalance = customer ? balances.get(customer.id) ?? {} : {};
 
   const chooseCustomer = (c: Customer) => {
@@ -212,20 +251,33 @@ export default function NewOperation() {
   const cFixed = f.cMode === 'fixed' ? parseMoney(f.cValue, c.decimals) : null;
   const commission = amount && amount > 0 ? commissionOf(amount, f.cMode, (f.cMode === 'percent' ? cBp : cFixed) ?? 0) : 0;
   const due = (amount ?? 0) - commission;
-  const rate = same ? null : parseRate(f.rate);
+  const typedAmount = f.payAmount.trim() ? parseMoney(f.payAmount, pc.decimals) : null;
+  // «كامل» بعملة أخرى: إن كتبتَ المبلغ المحوَّل بنفسك يُستنتج السعر منه
+  const amountDrives = f.payMode === 'full' && !same && typedAmount != null && typedAmount > 0;
+  const rate = same ? null : amountDrives ? deriveRate(due, c.decimals, typedAmount!, pc.decimals) : parseRate(f.rate);
   const marketRate = !same && showMarket && f.marketRate ? parseRate(f.marketRate) : null;
-  const partial = f.payMode === 'partial' ? parseMoney(f.partial, pc.decimals) : null;
-  const payout = calcPayout({ due, decimals: c.decimals, mode: f.payMode, sameCurrency: same, payoutDecimals: pc.decimals, rate, partialAmount: partial, marketRate });
+  const payout = calcPayout({
+    due,
+    decimals: c.decimals,
+    mode: f.payMode,
+    sameCurrency: same,
+    payoutDecimals: pc.decimals,
+    rate,
+    partialAmount: f.payMode === 'partial' ? typedAmount : null,
+    fullAmount: amountDrives ? typedAmount : null,
+    marketRate,
+  });
   const newBalance = { ...prevBalance, [f.currency]: (prevBalance[f.currency] ?? 0) + payout.remaining };
+  const sym = (code: string) => cur(code).symbol;
 
   const errors = {
     customer: !name ? 'اكتب اسم الزبون' : null,
-    amount: amount == null || amount <= 0 ? (f.amount ? `مبلغ غير صالح (حتى ${c.decimals} خانات عشرية)` : 'أدخل المبلغ') : null,
-    method: !f.method.trim() ? 'اختر أو اكتب طريقة الاستلام' : null,
+    amount: amount == null || amount <= 0 ? (f.amount ? `مبلغ غير صالح (حتى ${c.decimals} خانات عشرية)` : 'أدخل المبلغ الذي وصلك') : null,
+    method: !f.method.trim() ? 'اختر أو اكتب كيف وصلك المبلغ' : null,
     commission: f.cMode === 'percent' ? (cBp == null || cBp < 0 || cBp > 10000 ? 'نسبة غير صالحة' : null) : cFixed == null || cFixed < 0 ? 'مبلغ غير صالح' : null,
-    rate: f.payMode !== 'later' && !same && !rate ? 'أدخل سعر التحويل' : showMarket && f.marketRate && !marketRate ? 'سعر غير صالح' : null,
-    partial: f.payMode === 'partial' && (partial == null || partial <= 0) ? 'أدخل المبلغ المحوَّل' : null,
-    payMethod: f.payMode !== 'later' && !f.payMethod.trim() ? 'اختر أو اكتب طريقة التحويل' : null,
+    rate: f.payMode !== 'later' && !same && !rate ? 'اكتب السعر أو المبلغ الذي حوّلته' : showMarket && f.marketRate && !marketRate ? 'سعر غير صالح' : null,
+    payAmount: f.payMode === 'partial' && (typedAmount == null || typedAmount <= 0) ? 'اكتب المبلغ الذي حوّلته' : f.payAmount.trim() && typedAmount == null ? 'مبلغ غير صالح' : null,
+    payMethod: f.payMode !== 'later' && !f.payMethod.trim() ? 'اختر أو اكتب نوع التحويل' : null,
   };
   const hasError = Object.values(errors).some(Boolean);
   const err = (k: keyof typeof errors) => (submitted ? errors[k] : null);
@@ -291,9 +343,21 @@ export default function NewOperation() {
         draft.clear();
         toast(`حُفظت عملية ${name} ✓`);
         // التاريخ المختار يدوياً يبقى للعملية التالية (لتسهيل إدخال الحركات القديمة)
-        setF({ ...blank(), currency: f.currency, kind: f.kind, method: f.method.trim(), payCurrency: f.payCurrency, payKind: f.payKind, payMethod: f.payMethod.trim(), rate: f.rate, marketRate: f.marketRate, date: dateTouched ? f.date : toLocalInput() });
+        setF({
+          ...blank(),
+          currency: f.currency,
+          method: f.method.trim(),
+          payCurrency: f.payCurrency,
+          payMethod: f.payMethod.trim(),
+          rate: !same && rate ? formatRate(rate) : '',
+          marketRate: f.marketRate,
+          date: dateTouched ? f.date : toLocalInput(),
+        });
         setSubmitted(false);
         setMore(false);
+        setShowInKind(false);
+        setShowOutKind(false);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
         customerRef.current?.focus();
       }
     } catch (e2) {
@@ -306,31 +370,22 @@ export default function NewOperation() {
   if (editing && (existing === undefined || existingPay === undefined)) return null;
   if (editing && existing?.status === 'cancelled') return <p className="text-muted">لا يمكن تعديل عملية ملغاة.</p>;
 
-  const sym = (code: string) => cur(code).symbol;
-  // اقتراحات «الطبيعة»: ما استخدمته سابقاً + بدايات افتراضية
+  // اقتراحات «الوصف»: ما استخدمته سابقاً + بدايات افتراضية
   const used = (vals: (string | undefined)[], starters: string[]) => [...new Set([...vals.filter((v): v is string => !!v), ...starters])].slice(0, 8);
-  const inKinds = used((allOps ?? []).map((o) => o.kind), ['حوالة', 'إيداع', 'كاش', 'أمانة']);
-  const outKinds = used((allPays ?? []).map((p) => p.kind), ['تحويل', 'تسليم كاش', 'دفعة']);
+  const inKinds = used((allOps ?? []).map((o) => o.kind), ['حوالة', 'أمانة', 'سداد دين', 'دفعة']);
+  const outKinds = used((allPays ?? []).map((p) => p.kind), ['تحويل', 'تسليم باليد', 'دفعة']);
+  const currencyChips = activeCurrencies.map((x) => ({ value: x.code, label: x.code === 'USDT' ? 'USDT' : `${x.name}` }));
+  const shownRate = amountDrives && rate ? formatRate(rate) : f.rate;
 
   return (
-    <form onSubmit={submit} noValidate className="mx-auto max-w-2xl">
+    <form onSubmit={submit} noValidate className="mx-auto max-w-3xl">
       <PageTitle>{editing ? 'تعديل عملية' : 'عملية جديدة'}</PageTitle>
-      {!editing && draft.restoredAt && (
-        <div className="mb-4 flex items-center gap-3 rounded-3xl bg-pending-bg px-4 py-3 text-sm text-pending-ink">
-          <span className="text-lg">📝</span>
-          <p className="flex-1 font-medium">
-            استرجعنا ما كتبته ولم تحفظه <span className="num opacity-80">({fmtDateTime(draft.restoredAt)})</span>
-          </p>
-          <button type="button" className="shrink-0 rounded-xl bg-white/60 px-3 py-1.5 font-semibold dark:bg-black/20" onClick={discardDraft}>
-            مسح
-          </button>
-        </div>
-      )}
+      {!editing && <DraftNotice at={draft.restoredAt} onDiscard={discardDraft} />}
 
-      <div className="grid gap-4 md:grid-cols-[1fr_280px]">
+      <div className="grid gap-4 md:grid-cols-[1fr_300px]">
         <div className="space-y-4">
-          {/* التاريخ — ظاهر دائماً للإدخال بأثر رجعي */}
-          <section className="card">
+          {/* التاريخ والزبون */}
+          <section className="card space-y-4">
             <DateField
               value={f.date}
               onChange={(v) => {
@@ -338,74 +393,86 @@ export default function NewOperation() {
                 setDateTouched(true);
               }}
             />
+            <div>
+              <Field label="الزبون" error={err('customer')}>
+                <div className="relative">
+                  <input
+                    ref={customerRef}
+                    className="input pe-12"
+                    value={f.customer}
+                    onChange={(e) => {
+                      set('customer', e.target.value);
+                      setSuggest(true);
+                    }}
+                    onFocus={() => setSuggest(true)}
+                    onBlur={() => setTimeout(() => setSuggest(false), 150)}
+                    placeholder="اسم الزبون (جديد أو قديم)"
+                    autoComplete="off"
+                  />
+                  {name && (
+                    <span className="absolute end-2 top-1/2 -translate-y-1/2">
+                      {customer ? <Avatar name={customer.name} size={34} /> : <span className="rounded-full bg-gold/25 px-2 py-0.5 text-xs font-semibold text-pending-ink">زبون جديد</span>}
+                    </span>
+                  )}
+                </div>
+              </Field>
+              {suggest && matches.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {matches.map((m) => (
+                    <button key={m.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => chooseCustomer(m)} className="flex items-center gap-2 rounded-full border border-card-border bg-paper py-1 pe-3 ps-1 text-sm font-semibold">
+                      <Avatar name={m.name} size={28} /> {m.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {customer && Object.values(prevBalance).some((v) => v !== 0) && (
+                <p className="mt-2 rounded-2xl bg-pending-bg px-3 py-2 text-sm font-medium text-pending-ink">
+                  رصيد سابق له عندي: <MoneyList values={prevBalance} className="font-bold" />
+                </p>
+              )}
+            </div>
           </section>
 
-          {/* ١. الزبون */}
-          <section className="card">
-            <Field label="الزبون" error={err('customer')}>
+          {/* ١. وصلني */}
+          <Step n={1} title="وصلني من الزبون" icon="inbox" tone="in">
+            <Field label="كم وصلك؟" error={err('amount')}>
               <div className="relative">
-                <input
-                  ref={customerRef}
-                  className="input pe-12"
-                  value={f.customer}
-                  onChange={(e) => {
-                    set('customer', e.target.value);
-                    setSuggest(true);
-                  }}
-                  onFocus={() => setSuggest(true)}
-                  onBlur={() => setTimeout(() => setSuggest(false), 150)}
-                  placeholder="اسم الزبون (جديد أو قديم)"
-                  autoComplete="off"
-                />
-                {name && <span className="absolute end-2 top-1/2 -translate-y-1/2">{customer ? <Avatar name={customer.name} size={34} /> : <span className="rounded-full bg-gold/25 px-2 py-0.5 text-xs font-bold text-pending-ink">جديد</span>}</span>}
+                <MoneyInput ref={amountRef} value={f.amount} onChange={(e) => set('amount', e.target.value)} placeholder="0" className="pe-16 text-3xl font-bold" />
+                <span className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-base font-semibold text-muted">{sym(f.currency)}</span>
               </div>
             </Field>
-            {suggest && matches.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {matches.map((m) => (
-                  <button key={m.id} type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => chooseCustomer(m)} className="flex items-center gap-2 rounded-full border border-card-border bg-paper py-1 pe-3 ps-1 text-sm font-bold">
-                    <Avatar name={m.name} size={28} /> {m.name}
-                  </button>
-                ))}
-              </div>
+            <div>
+              <span className="label">العملة</span>
+              <Chips small value={f.currency} onChange={(v) => setF((s) => withRate({ ...s, currency: v, payCurrency: prefs.payoutCurrency?.[v] ?? (s.payCurrency === s.currency ? v : s.payCurrency) }))} options={currencyChips} />
+            </div>
+            <FreeChoice label="وصلني عن طريق" value={f.method} options={inMethods.map((m) => m.name)} onChange={(v) => set('method', v)} placeholder="مثلاً: محفظة، بنك القاهرة…" error={err('method')} />
+            {showInKind || f.kind ? (
+              <FreeChoice label="وصف (اختياري)" value={f.kind} options={inKinds} onChange={(v) => set('kind', v)} placeholder="مثلاً: أمانة، سداد…" />
+            ) : (
+              <button type="button" className="text-sm font-medium text-muted underline" onClick={() => setShowInKind(true)}>
+                + وصف لما وصلني (حوالة، أمانة، سداد…)
+              </button>
             )}
-            {customer && Object.values(prevBalance).some((v) => v !== 0) && (
-              <p className="mt-2 rounded-2xl bg-pending-bg px-3 py-2 text-sm font-bold text-pending-ink">
-                رصيد سابق له عندي: <MoneyList values={prevBalance} />
-              </p>
-            )}
-          </section>
+          </Step>
 
-          {/* ٢. استلمت */}
-          <section className="card space-y-4">
-            <h2 className="flex items-center gap-2 text-lg font-bold">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-income/15 text-income">
-                <Icon name="inbox" size={18} />
-              </span>
-              استلمت منه
-            </h2>
-            <Field label="المبلغ" error={err('amount')}>
-              <MoneyInput ref={amountRef} value={f.amount} onChange={(e) => set('amount', e.target.value)} placeholder="0" className="text-3xl font-bold" />
-            </Field>
-            <Chips value={f.currency} onChange={(v) => setF((s) => withRate({ ...s, currency: v, payCurrency: prefs.payoutCurrency?.[v] ?? (s.payCurrency === s.currency ? v : s.payCurrency) }))} options={activeCurrencies.map((x) => ({ value: x.code, label: x.name }))} />
-            <FreeChoice label="طبيعة الاستلام" value={f.kind} options={inKinds} onChange={(v) => set('kind', v)} placeholder="مثلاً: حوالة، أمانة، سداد…" />
-            <FreeChoice label="عن طريق" value={f.method} options={inMethods.map((m) => m.name)} onChange={(v) => set('method', v)} placeholder="مثلاً: بنك فلسطين، محفظة جوال…" error={err('method')} />
-          </section>
-
-          {/* ٣. العمولة */}
-          <section className="card">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-lg font-bold">عمولتي</h2>
+          {/* ٢. عمولتي */}
+          <Step
+            n={2}
+            title="عمولتي"
+            icon="chart"
+            tone="plain"
+            aside={
               <Chips
                 small
                 value={f.cMode}
                 onChange={(v) => setF((s) => ({ ...s, cMode: v, cValue: v === 'percent' ? formatPercent(customer?.commissionBp ?? defaultCommissionBp) : '' }))}
                 options={[
-                  { value: 'percent', label: 'نسبة %' },
+                  { value: 'percent', label: '%' },
                   { value: 'fixed', label: 'مبلغ' },
                 ]}
               />
-            </div>
+            }
+          >
             <div className="grid grid-cols-2 items-end gap-3">
               <Field label={f.cMode === 'percent' ? 'النسبة %' : `المبلغ (${sym(f.currency)})`} error={err('commission')}>
                 <MoneyInput value={f.cValue} onChange={(e) => set('cValue', e.target.value)} className="text-xl" />
@@ -415,62 +482,90 @@ export default function NewOperation() {
                 <Money value={commission} currency={f.currency} tone="income" className="text-xl font-bold" />
               </div>
             </div>
-            {f.cMode === 'percent' && <p className="mt-2 text-xs text-muted">تُحفظ هذه النسبة لهذا الزبون للمرة القادمة</p>}
-          </section>
+            <p className="text-sm text-muted">
+              المستحق للزبون بعد العمولة: <Money value={due} currency={f.currency} className="font-bold text-ink" />
+            </p>
+          </Step>
 
-          {/* ٤. حوّلت له */}
-          <section className="card space-y-4">
-            <h2 className="flex items-center gap-2 text-lg font-bold">
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary-2 dark:text-gold">
-                <Icon name="send" size={18} />
-              </span>
-              حوّلت له
-            </h2>
+          {/* ٣. حوّلت له */}
+          <Step n={3} title="حوّلت للزبون" icon="send" tone="out">
             <Chips
               value={f.payMode}
-              onChange={(v) => set('payMode', v)}
+              onChange={(v) => setF((s) => ({ ...s, payMode: v, payAmount: v === s.payMode ? s.payAmount : '' }))}
               options={[
                 { value: 'full', label: 'كامل المستحق' },
-                { value: 'partial', label: 'جزء' },
-                { value: 'later', label: 'لاحقاً' },
+                { value: 'partial', label: 'جزء منه' },
+                { value: 'later', label: 'لم أحوّل بعد' },
               ]}
             />
-            {f.payMode !== 'later' && (
+            {f.payMode === 'later' ? (
+              <p className="rounded-2xl bg-pending-bg px-3 py-2.5 text-sm font-medium text-pending-ink">
+                يبقى المستحق <Money value={due} currency={f.currency} className="font-bold" /> رصيداً له عندك، وتحوّله لاحقاً من صفحة الزبون.
+              </p>
+            ) : (
               <>
                 <div>
-                  <span className="label">بعملة</span>
-                  <Chips small value={f.payCurrency} onChange={(v) => setF((s) => withRate({ ...s, payCurrency: v }))} options={activeCurrencies.map((x) => ({ value: x.code, label: x.name }))} />
+                  <span className="label">حوّلت له بعملة</span>
+                  <Chips small value={f.payCurrency} onChange={(v) => setF((s) => withRate({ ...s, payCurrency: v }))} options={currencyChips} />
                 </div>
-                <FreeChoice label="طبيعة التحويل" value={f.payKind} options={outKinds} onChange={(v) => set('payKind', v)} placeholder="مثلاً: دفعة، تسليم باليد…" />
-                <FreeChoice label="عن طريق" value={f.payMethod} options={outMethods.map((m) => m.name)} onChange={(v) => set('payMethod', v)} placeholder="مثلاً: بنك القدس، كاش…" error={err('payMethod')} />
-                <div className="grid grid-cols-2 gap-3">
-                  {!same && (
-                    <Field label={`السعر: 1 ${sym(f.currency)} =`} error={err('rate')} hint={recallRate(fxMemo, f.currency, f.payCurrency) ? 'آخر سعر استخدمته' : undefined}>
-                      <MoneyInput value={f.rate} onChange={(e) => set('rate', e.target.value)} placeholder="3.60" />
+                <FreeChoice label="نوع التحويل" value={f.payMethod} options={outMethods.map((m) => m.name)} onChange={(v) => set('payMethod', v)} placeholder="مثلاً: بنك فلسطين، إنستاباي…" error={err('payMethod')} />
+
+                {/* المبلغ والسعر */}
+                {same ? (
+                  f.payMode === 'partial' && (
+                    <Field label={`كم حوّلت له؟ (${sym(f.payCurrency)})`} error={err('payAmount')}>
+                      <MoneyInput value={f.payAmount} onChange={(e) => set('payAmount', e.target.value)} className="text-xl font-bold" />
                     </Field>
-                  )}
-                  {f.payMode === 'partial' && (
-                    <Field label={`المبلغ المحوَّل (${sym(f.payCurrency)})`} error={err('partial')}>
-                      <MoneyInput value={f.partial} onChange={(e) => set('partial', e.target.value)} />
-                    </Field>
-                  )}
-                </div>
-                {!same &&
-                  (showMarket ? (
-                    <Field label="سعر السوق (لحساب ربح فرق السعر)" hint="اختياري">
-                      <MoneyInput value={f.marketRate} onChange={(e) => set('marketRate', e.target.value)} />
-                    </Field>
-                  ) : (
-                    <button type="button" className="text-sm font-medium text-muted underline" onClick={() => setShowMarket(true)}>
-                      + سعر السوق (لحساب ربح فرق السعر)
-                    </button>
-                  ))}
+                  )
+                ) : (
+                  <div className="rounded-2xl bg-paper p-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label={`كم حوّلت؟ (${sym(f.payCurrency)})`} error={err('payAmount')}>
+                        <MoneyInput
+                          value={f.payAmount}
+                          onChange={(e) => set('payAmount', e.target.value)}
+                          placeholder={f.payMode === 'full' && payout.ok && payout.payoutAmount > 0 ? toInputString(payout.payoutAmount, pc.decimals) : '0'}
+                          className="text-xl font-bold"
+                        />
+                      </Field>
+                      <Field label={`السعر: 1 ${sym(f.currency)} =`} error={err('rate')}>
+                        <MoneyInput
+                          value={shownRate}
+                          onChange={(e) => setF((s) => ({ ...s, rate: e.target.value, payAmount: s.payMode === 'full' ? '' : s.payAmount }))}
+                          placeholder="0"
+                          className={cx('text-xl', amountDrives && 'text-muted')}
+                        />
+                      </Field>
+                    </div>
+                    <p className="mt-2 text-xs text-muted">
+                      {f.payMode === 'full' ? 'اكتب السعر فيُحسب المبلغ، أو اكتب المبلغ الذي حوّلته فيُحسب السعر.' : 'اكتب المبلغ الذي حوّلته والسعر، فيُخصم ما يعادله من رصيده.'}
+                      {!amountDrives && recallRate(fxMemo, f.currency, f.payCurrency) && ' السعر من آخر عملية.'}
+                    </p>
+                    {showMarket ? (
+                      <Field label="سعر السوق (لحساب ربح فرق السعر)" hint="اختياري" className="mt-3">
+                        <MoneyInput value={f.marketRate} onChange={(e) => set('marketRate', e.target.value)} />
+                      </Field>
+                    ) : (
+                      <button type="button" className="mt-2 text-sm font-medium text-muted underline" onClick={() => setShowMarket(true)}>
+                        + سعر السوق (لحساب ربح فرق السعر)
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {showOutKind || f.payKind ? (
+                  <FreeChoice label="وصف التحويل (اختياري)" value={f.payKind} options={outKinds} onChange={(v) => set('payKind', v)} />
+                ) : (
+                  <button type="button" className="text-sm font-medium text-muted underline" onClick={() => setShowOutKind(true)}>
+                    + وصف للتحويل
+                  </button>
+                )}
               </>
             )}
-          </section>
+          </Step>
 
           <button type="button" className="btn-ghost w-full" onClick={() => setMore((m) => !m)}>
-            {more ? 'إخفاء التفاصيل ▲' : 'رقم مرجعي، ملاحظات ▼'}
+            {more ? 'إخفاء ▲' : 'رقم مرجعي، ملاحظات ▼'}
           </button>
           {more && (
             <section className="card grid gap-4 sm:grid-cols-2">
@@ -484,58 +579,66 @@ export default function NewOperation() {
           )}
         </div>
 
-        {/* الملخص */}
+        {/* ═══ الإيصال: ملخص واضح للعملية ═══ */}
         <aside className="space-y-3 md:sticky md:top-24 md:self-start">
           <div className="hero rounded-[28px] p-5">
-            <p className="text-sm font-medium opacity-85">ملخص العملية {name && `· ${name}`}</p>
-            <dl className="mt-3 space-y-2 text-base">
-              <div className="flex justify-between gap-2">
-                <dt className="opacity-80">استلمت</dt>
-                <dd className="font-bold">{amount ? <Money value={amount} currency={f.currency} /> : '—'}</dd>
+            <div className="mb-2 flex items-center justify-between gap-2 border-b border-white/15 pb-3">
+              <p className="font-bold">ملخص العملية</p>
+              {name && <span className="truncate text-sm opacity-85">{name}</span>}
+            </div>
+            <dl>
+              <Line
+                label="⬇ وصلني"
+                value={amount ? <Money value={amount} currency={f.currency} /> : '—'}
+                sub={f.method && `عن طريق ${f.method}${f.kind ? ` · ${f.kind}` : ''}`}
+                strong
+              />
+              <Line label={`− عمولتي${f.cMode === 'percent' && cBp != null ? ` (${formatPercent(cBp)}%)` : ''}`} value={<Money value={commission} currency={f.currency} />} tone="gold" />
+              <Line label="= المستحق له" value={<Money value={due} currency={f.currency} />} />
+              <div className="my-1 border-t border-dashed border-white/20" />
+              {f.payMode === 'later' ? (
+                <Line label="⬆ حوّلت له" value="لم أحوّل بعد" tone="dim" />
+              ) : (
+                <Line
+                  label="⬆ حوّلت له"
+                  value={payout.ok && payout.payoutAmount > 0 ? <Money value={payout.payoutAmount} currency={f.payCurrency} /> : '—'}
+                  sub={
+                    <>
+                      {f.payMethod && `عن طريق ${f.payMethod}`}
+                      {!same && rate ? (
+                        <>
+                          {' · '}السعر <span className="num">{formatRate(rate)}</span>
+                        </>
+                      ) : null}
+                    </>
+                  }
+                  strong
+                />
+              )}
+              <div className={cx('mt-2 flex items-center justify-between rounded-2xl px-3 py-2', payout.remaining !== 0 ? 'bg-gold/25' : 'bg-white/10')}>
+                <span className="text-sm font-semibold">{payout.remaining < 0 ? 'دفعت له زيادة' : 'الباقي له عندي'}</span>
+                <Money value={Math.abs(payout.remaining)} currency={f.currency} className="font-bold" />
               </div>
-              <div className="flex justify-between gap-2">
-                <dt className="opacity-80">ربحي</dt>
-                <dd className="font-bold text-gold">
+              <div className="mt-3 flex items-center justify-between border-t border-white/15 pt-3">
+                <span className="font-bold">ربحي من العملية</span>
+                <span className="text-end text-xl font-bold text-gold">
                   <Money value={commission} currency={f.currency} />
-                </dd>
-              </div>
-              <div className="flex justify-between gap-2 border-t border-white/15 pt-2">
-                <dt className="opacity-80">المستحق له</dt>
-                <dd className="font-bold">
-                  <Money value={due} currency={f.currency} />
-                </dd>
-              </div>
-              {f.payMode !== 'later' && payout.ok && (
-                <div className="flex justify-between gap-2">
-                  <dt className="opacity-80">حوّلت له</dt>
-                  <dd className="text-xl font-bold">
-                    <Money value={payout.payoutAmount} currency={f.payCurrency} />
-                  </dd>
-                </div>
-              )}
-              {payout.fxProfit !== 0 && (
-                <div className="flex justify-between gap-2">
-                  <dt className="opacity-80">ربح فرق السعر</dt>
-                  <dd className="font-bold text-gold">
-                    <Money value={payout.fxProfit} currency={f.payCurrency} />
-                  </dd>
-                </div>
-              )}
-              <div className={cx('flex justify-between gap-2 rounded-2xl px-3 py-2', payout.remaining !== 0 ? 'bg-gold/20' : 'bg-white/10')}>
-                <dt className="font-bold">{payout.remaining < 0 ? 'دفعت له زيادة' : 'الباقي له'}</dt>
-                <dd className="font-bold">
-                  <Money value={Math.abs(payout.remaining)} currency={f.currency} />
-                </dd>
+                  {payout.fxProfit !== 0 && (
+                    <span className="block text-sm">
+                      + <Money value={payout.fxProfit} currency={f.payCurrency} /> فرق سعر
+                    </span>
+                  )}
+                </span>
               </div>
             </dl>
             {customer && Object.values(prevBalance).some((v) => v !== 0) && (
-              <p className="mt-2 text-sm opacity-90">
+              <p className="mt-3 text-sm opacity-90">
                 رصيده الكلي بعد العملية: <MoneyList values={newBalance} className="font-bold" />
               </p>
             )}
           </div>
 
-          <button type="submit" disabled={saving} className="btn-gold w-full py-4 text-lg">
+          <button type="submit" disabled={saving} className="btn-gold hidden w-full py-4 text-lg md:flex">
             <Icon name="check" size={22} /> {editing ? 'حفظ التعديلات' : 'حفظ العملية'}
           </button>
           {editing && (
@@ -544,6 +647,19 @@ export default function NewOperation() {
             </button>
           )}
         </aside>
+      </div>
+
+      {/* شريط الحفظ الثابت على الجوال */}
+      <div className="sticky bottom-[92px] z-20 mt-4 md:hidden">
+        <div className="flex items-center gap-3 rounded-3xl border border-card-border bg-card/95 p-2 ps-4 shadow-lg backdrop-blur">
+          <div className="min-w-0 flex-1 leading-tight">
+            <p className="text-xs text-muted">ربحي</p>
+            <Money value={commission} currency={f.currency} tone="income" className="font-bold" />
+          </div>
+          <button type="submit" disabled={saving} className="btn-gold px-6">
+            <Icon name="check" size={20} /> {editing ? 'حفظ' : 'حفظ العملية'}
+          </button>
+        </div>
       </div>
     </form>
   );

@@ -19,7 +19,7 @@ import {
   type OperationInput,
   type PaymentInput,
 } from './ops';
-import { cashBalances, customerBalances, dailyProfit, groupOps, summarize, totalOwed } from '../lib/aggregate';
+import { cashBalances, customerBalances, dailyProfit, groupOps, monthlyProfit, summarize, totalOwed } from '../lib/aggregate';
 
 let db: SarrafDB;
 let n = 0;
@@ -227,7 +227,7 @@ describe('الترحيل والنسخ الاحتياطي', () => {
 
     const v2 = new SarrafDB(name);
     await v2.open();
-    expect(v2.verno).toBe(3);
+    expect(v2.verno).toBe(4);
     const [customers, ops, pays, mv, methods, curr] = await Promise.all([
       v2.customers.toArray(),
       v2.operations.toArray(),
@@ -242,6 +242,8 @@ describe('الترحيل والنسخ الاحتياطي', () => {
     expect(pays).toHaveLength(1);
     expect(methods.map((m) => m.name)).toContain('Western Union');
     expect(curr.map((c) => c.code)).toContain('USDT');
+    expect(curr.map((c) => c.code)).toContain('EGP');
+    expect(methods.map((m) => m.name)).toEqual(expect.arrayContaining(['جوال باي', 'بال باي', 'فودافون كاش']));
     expect((await v2.settings.get('defaultCommissionBp'))?.value).toBe(150);
     expect(await v2.transfers.count()).toBe(3); // الأرشيف القديم محفوظ
     // الرصيد نفسه قبل وبعد: 5000 إيداع − 990 صرف + استلامات (2 × 1000 غير ملغاة)
@@ -255,7 +257,7 @@ describe('الترحيل والنسخ الاحتياطي', () => {
     await seedIfEmpty(db);
     await createOperation('أ', op(), pay(), db);
     const backup = JSON.parse(JSON.stringify(await exportBackup(db)));
-    expect(backup.version).toBe(3);
+    expect(backup.version).toBe(4);
     const other = new SarrafDB(`restore-${++n}`);
     await importBackup(backup, other);
     expect(await other.operations.count()).toBe(1);
@@ -299,5 +301,22 @@ describe('الطرق والنوع الحر', () => {
     const { op: o, payment } = await createOperation('ك', op({ date: past, kind: 'أمانة' }), pay({ date: past, kind: 'دفعة أولى' }), db);
     expect((await db.operations.get(o.id))).toMatchObject({ date: past, kind: 'أمانة' });
     expect((await db.payments.get(payment!.id))).toMatchObject({ date: past, kind: 'دفعة أولى' });
+  });
+});
+
+describe('الأرباح المتراكمة', () => {
+  it('شهراً بشهر مع المتراكم، وتستثني الملغاة', async () => {
+    await createOperation('أ', op({ date: '2026-09-10T10:00:00.000Z' }), null, db); // 20 USDT
+    await createOperation('ب', op({ date: '2026-10-05T10:00:00.000Z', amount: 50000, commission: 1000, due: 49000 }), pay({ date: '2026-10-05T10:00:00.000Z', fxProfit: 700 }), db);
+    const { op: c } = await createOperation('ج', op({ date: '2026-10-20T10:00:00.000Z' }), null, db);
+    await cancelOperation(c.id, 'خطأ', db);
+    await createOperation('د', op({ date: '2026-11-01T10:00:00.000Z', currency: 'ILS', commission: 1500, due: 98500 }), null, db);
+    const s = await state();
+    const rows = monthlyProfit(s.ops, s.pays, (iso) => iso.slice(0, 7));
+    expect(rows.map((r) => r.month)).toEqual(['2026-09', '2026-10', '2026-11']);
+    expect(rows[1]).toMatchObject({ count: 1, commission: { USDT: 1000 }, fxProfit: { ILS: 700 }, profit: { USDT: 1000, ILS: 700 } });
+    expect(rows[0].cumulative).toEqual({ USDT: 2000 });
+    expect(rows[1].cumulative).toEqual({ USDT: 3000, ILS: 700 });
+    expect(rows[2].cumulative).toEqual({ USDT: 3000, ILS: 2200 });
   });
 });

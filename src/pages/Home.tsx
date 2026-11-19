@@ -27,6 +27,7 @@ export default function Home() {
     const todayOps = ops.filter((o) => localDay(o.date) === today);
     const todayPays = payments.filter((p) => localDay(p.date) === today);
     const sToday = summarize(todayOps, todayPays);
+    const allProfit = summarize(ops, payments).profit;
     const days = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
     const week = dailyProfit(ops, payments, days, (iso) => localDay(iso));
     const weekTotal: Record<string, number> = {};
@@ -43,6 +44,7 @@ export default function Home() {
     }
     return {
       sToday,
+      allProfit,
       payCount: todayPays.filter((p) => p.status !== 'cancelled').length,
       week,
       weekTotal,
@@ -101,7 +103,12 @@ export default function Home() {
 
       {/* بطاقة الأرباح الرئيسية */}
       <section className="hero overflow-hidden rounded-[28px] p-5 shadow-[0_12px_30px_-12px_rgb(var(--shadow)/0.6)]">
-        <p className="text-sm font-medium opacity-85">أرباح اليوم</p>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium opacity-85">أرباح اليوم</p>
+          <Link to="/profits" className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold hover:bg-white/25">
+            كل الأرباح ←
+          </Link>
+        </div>
         <div className="mt-1 text-[2.1rem] font-bold leading-tight text-gold">
           <MoneyList values={d.sToday.profit} empty="0" vertical />
         </div>
@@ -124,6 +131,14 @@ export default function Home() {
             <span className="font-bold opacity-80">استلمت اليوم: </span>
             <MoneyList values={d.sToday.received} className="font-bold" />
           </div>
+        )}
+        {nonZero(d.allProfit).length > 0 && (
+          <Link to="/profits" className="mt-3 flex items-center justify-between gap-2 rounded-2xl bg-black/15 px-3 py-2.5 text-sm transition hover:bg-black/25">
+            <span className="font-semibold opacity-90">أرباحي المتراكمة</span>
+            <span className="text-end font-bold text-gold">
+              <MoneyList values={d.allProfit} />
+            </span>
+          </Link>
         )}
       </section>
 

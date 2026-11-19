@@ -43,6 +43,10 @@ export class SarrafDB extends Dexie {
       .upgrade(migrateV1toV2);
     // الإصدار 3: حقل kind (طبيعة الاستلام/التحويل) اختياري وغير مفهرس — لا تغيير في البيانات القائمة
     this.version(3).stores({});
+    // الإصدار 4: الجنيه المصري + محافظ التحويل الشائعة (جوال باي، بال باي، فودافون كاش) دون المساس بالموجود
+    this.version(4)
+      .stores({})
+      .upgrade((tx) => addV4Defaults(tx));
   }
 }
 
@@ -52,6 +56,29 @@ export const uid = () =>
 export const nowIso = () => new Date().toISOString();
 
 const USDT: Currency = { code: 'USDT', name: 'USDT', symbol: 'USDT', decimals: 2, active: true, order: 3 };
+const EGP: Currency = { code: 'EGP', name: 'جنيه مصري', symbol: 'ج.م', decimals: 2, active: true, order: 6 };
+
+/** الطرق الافتراضية (الترتيب = ترتيب الظهور) */
+export const DEFAULT_METHODS: [string, Method['use']][] = [
+  ['USDT', 'both'],
+  ['تحويل بنكي', 'both'],
+  ['جوال باي', 'both'],
+  ['بال باي', 'both'],
+  ['فودافون كاش', 'both'],
+  ['نقدي', 'both'],
+  ['ويسترن يونيون', 'in'],
+  ['موني غرام', 'in'],
+];
+
+/** ترحيل الإصدار 4: يضيف ما ينقص فقط (لا يغيّر ولا يحذف شيئاً) */
+export async function addV4Defaults(tx: Transaction) {
+  if (!(await tx.table('currencies').get('EGP'))) await tx.table('currencies').add(EGP);
+  const methods = (await tx.table('methods').toArray()) as Method[];
+  let order = Math.max(0, ...methods.map((m) => m.order));
+  for (const name of ['جوال باي', 'بال باي', 'فودافون كاش']) {
+    if (!methods.some((m) => m.name === name)) await tx.table('methods').add({ id: uid(), name, use: 'both', active: true, order: ++order });
+  }
+}
 
 /** ترحيل بيانات الإصدار 1 إلى نموذج الزبائن دون حذف أي شيء من الأرشيف. */
 export async function migrateV1toV2(tx: Transaction) {
@@ -156,17 +183,11 @@ export async function seedIfEmpty(database: SarrafDB = db) {
         USDT,
         { code: 'JOD', name: 'دينار', symbol: 'د.أ', decimals: 3, active: true, order: 4 },
         { code: 'EUR', name: 'يورو', symbol: '€', decimals: 2, active: true, order: 5 },
+        EGP,
       ]);
     }
     if ((await database.methods.count()) === 0) {
-      const list: [string, Method['use']][] = [
-        ['USDT', 'both'],
-        ['تحويل بنكي', 'both'],
-        ['نقدي', 'both'],
-        ['ويسترن يونيون', 'in'],
-        ['موني غرام', 'in'],
-      ];
-      await database.methods.bulkAdd(list.map(([name, use], i) => ({ id: uid(), name, use, active: true, order: i + 1 })));
+      await database.methods.bulkAdd(DEFAULT_METHODS.map(([name, use], i) => ({ id: uid(), name, use, active: true, order: i + 1 })));
     }
     if (!(await database.settings.get('defaultCommissionBp'))) await database.settings.put({ key: 'defaultCommissionBp', value: 100 });
   });

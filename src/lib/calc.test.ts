@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calcPayout, commissionOf, convertBack } from './calc';
+import { calcPayout, commissionOf, convertBack, deriveRate } from './calc';
 
 describe('commissionOf', () => {
   it('نسبة مئوية', () => {
@@ -56,5 +56,28 @@ describe('calcPayout', () => {
   it('غير صالح بدون سعر أو مبلغ', () => {
     expect(calcPayout({ ...base, mode: 'full', sameCurrency: false }).ok).toBe(false);
     expect(calcPayout({ ...base, mode: 'partial', sameCurrency: true }).ok).toBe(false);
+  });
+});
+
+describe('كتابة المبلغ المحوَّل مباشرة', () => {
+  it('كامل بعملة أخرى مع مبلغ مكتوب: لا يحتاج سعراً، ويُسدِّد المستحق كاملاً', () => {
+    // وصلني 100 USDT − 2% = 98، حوّلت 4,851 جنيه فودافون كاش
+    const r = calcPayout({ due: 9800, decimals: 2, mode: 'full', sameCurrency: false, payoutDecimals: 2, rate: null, partialAmount: null, fullAmount: 485100 });
+    expect(r).toEqual({ payoutAmount: 485100, settled: 9800, remaining: 0, fxProfit: 0, ok: true });
+  });
+  it('المبلغ المكتوب يتقدّم على السعر', () => {
+    const r = calcPayout({ due: 9800, decimals: 2, mode: 'full', sameCurrency: false, payoutDecimals: 2, rate: 50_000_000, partialAmount: null, fullAmount: 485100 });
+    expect(r.payoutAmount).toBe(485100);
+  });
+  it('ربح فرق السعر مع المبلغ المكتوب وسعر السوق', () => {
+    // السوق 50: 98 × 50 = 4,900 − 4,851 = 49 جنيه ربح
+    const r = calcPayout({ due: 9800, decimals: 2, mode: 'full', sameCurrency: false, payoutDecimals: 2, rate: null, partialAmount: null, fullAmount: 485100, marketRate: 50_000_000 });
+    expect(r.fxProfit).toBe(4900);
+  });
+  it('deriveRate', () => {
+    expect(deriveRate(9800, 2, 485100, 2)).toBe(49_500_000); // 49.5
+    expect(deriveRate(98000, 2, 352800, 2)).toBe(3_600_000); // 3.6
+    expect(deriveRate(100000, 3, 51500, 2)).toBe(5_150_000); // دينار → شيكل 5.15
+    expect(deriveRate(0, 2, 100, 2)).toBeNull();
   });
 });

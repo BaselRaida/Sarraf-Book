@@ -14,6 +14,7 @@ import Customers from './pages/Customers';
 import CustomerDetail from './pages/CustomerDetail';
 import CashBox from './pages/CashBox';
 import Reports from './pages/Reports';
+import Profits from './pages/Profits';
 import Settings from './pages/Settings';
 import LockScreen from './pages/LockScreen';
 
@@ -22,7 +23,7 @@ const NAV = [
   { to: '/customers', label: 'الزبائن', icon: 'users' },
   { to: '/new', label: 'عملية', icon: 'plus', main: true },
   { to: '/log', label: 'السجل', icon: 'list' },
-  { to: '/reports', label: 'التقارير', icon: 'chart' },
+  { to: '/profits', label: 'الأرباح', icon: 'coins' },
 ];
 
 function Shell({ onLock, canLock }: { onLock: () => void; canLock: boolean }) {
@@ -42,7 +43,7 @@ function Shell({ onLock, canLock }: { onLock: () => void; canLock: boolean }) {
             <span className="text-lg font-bold">صرّاف بوك</span>
           </NavLink>
           <nav className="ms-6 hidden gap-1 md:flex">
-            {[...NAV, { to: '/cash', label: 'الصندوق', icon: 'wallet' }, { to: '/settings', label: 'الإعدادات', icon: 'gear' }].map((n) => (
+            {[...NAV, { to: '/reports', label: 'التقارير', icon: 'chart' }, { to: '/cash', label: 'الصندوق', icon: 'wallet' }, { to: '/settings', label: 'الإعدادات', icon: 'gear' }].map((n) => (
               <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => cx('rounded-xl px-3 py-1.5 text-sm font-bold transition hover:bg-white/10', isActive && 'bg-white/15')}>
                 {n.to === '/new' ? 'عملية جديدة' : n.label}
               </NavLink>
@@ -78,6 +79,7 @@ function Shell({ onLock, canLock }: { onLock: () => void; canLock: boolean }) {
             <Route path="/log" element={<OperationsLog />} />
             <Route path="/cash" element={<CashBox />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/profits" element={<Profits />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Home />} />
           </Routes>

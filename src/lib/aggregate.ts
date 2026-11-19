@@ -110,3 +110,44 @@ export function dailyProfit(ops: Operation[], payments: Payment[], days: string[
 
 /** حذف الأصفار من مجموعة مبالغ. */
 export const nonZero = (m: Amounts) => Object.entries(m).filter(([, v]) => v !== 0);
+
+export interface MonthRow {
+  month: string; // YYYY-MM
+  count: number;
+  commission: Amounts;
+  fxProfit: Amounts;
+  profit: Amounts; // ربح الشهر
+  cumulative: Amounts; // المتراكم حتى نهاية الشهر
+}
+
+/**
+ * الأرباح شهراً بشهر مع المتراكم. monthOf يحوّل ISO إلى YYYY-MM محلي.
+ * تُرجع من الأقدم إلى الأحدث (المتراكم يتصاعد).
+ */
+export function monthlyProfit(ops: Operation[], payments: Payment[], monthOf: (iso: string) => string): MonthRow[] {
+  const map = new Map<string, MonthRow>();
+  const get = (m: string) => {
+    let r = map.get(m);
+    if (!r) map.set(m, (r = { month: m, count: 0, commission: {}, fxProfit: {}, profit: {}, cumulative: {} }));
+    return r;
+  };
+  for (const o of live(ops)) {
+    const r = get(monthOf(o.date));
+    r.count++;
+    add(r.commission, o.currency, o.commission);
+    add(r.profit, o.currency, o.commission);
+  }
+  for (const p of live(payments)) {
+    if (!p.fxProfit) continue;
+    const r = get(monthOf(p.date));
+    add(r.fxProfit, p.payoutCurrency, p.fxProfit);
+    add(r.profit, p.payoutCurrency, p.fxProfit);
+  }
+  const rows = [...map.values()].sort((a, b) => a.month.localeCompare(b.month));
+  const running: Amounts = {};
+  for (const r of rows) {
+    for (const [c, v] of Object.entries(r.profit)) add(running, c, v);
+    r.cumulative = { ...running };
+  }
+  return rows;
+}

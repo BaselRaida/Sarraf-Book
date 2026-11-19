@@ -29,6 +29,7 @@ export interface PayoutInput {
   payoutDecimals: number;
   rate: number | null; // سعر الصرف × 1e6 (مطلوب عند اختلاف العملة)
   partialAmount: number | null; // المبلغ المحوَّل عند "جزء" (بعملة التحويل)
+  fullAmount?: number | null; // عند "كامل" بعملة أخرى: المبلغ الذي حوّلته فعلاً إن كتبته بنفسك (بدل السعر)
   marketRate?: number | null;
 }
 
@@ -44,13 +45,14 @@ export interface PayoutResult {
 export function calcPayout(p: PayoutInput): PayoutResult {
   if (p.mode === 'later') return { payoutAmount: 0, settled: 0, remaining: p.due, fxProfit: 0, ok: true };
   const needsRate = !p.sameCurrency;
-  if (needsRate && !p.rate) return { payoutAmount: 0, settled: 0, remaining: p.due, fxProfit: 0, ok: false };
+  const typedFull = p.mode === 'full' && needsRate && p.fullAmount != null && p.fullAmount > 0;
+  if (needsRate && !p.rate && !typedFull) return { payoutAmount: 0, settled: 0, remaining: p.due, fxProfit: 0, ok: false };
 
   let payoutAmount: number;
   let settled: number;
   if (p.mode === 'full') {
     settled = p.due;
-    payoutAmount = p.sameCurrency ? p.due : convert(p.due, p.decimals, p.payoutDecimals, p.rate!);
+    payoutAmount = p.sameCurrency ? p.due : typedFull ? p.fullAmount! : convert(p.due, p.decimals, p.payoutDecimals, p.rate!);
   } else {
     if (p.partialAmount == null || p.partialAmount <= 0) return { payoutAmount: 0, settled: 0, remaining: p.due, fxProfit: 0, ok: false };
     payoutAmount = p.partialAmount;
@@ -58,4 +60,15 @@ export function calcPayout(p: PayoutInput): PayoutResult {
   }
   const fxProfit = needsRate && p.marketRate ? convert(settled, p.decimals, p.payoutDecimals, p.marketRate) - payoutAmount : 0;
   return { payoutAmount, settled, remaining: p.due - settled, fxProfit, ok: true };
+}
+
+/**
+ * السعر الفعلي المستنتج من مبلغين: كم حوّلت مقابل كم.
+ * deriveRate(98 USDT, 2, 4851 جنيه, 2) = 49.5 (× 1e6). يُرجع null إن كان المستحق صفراً.
+ */
+export function deriveRate(due: number, decimals: number, payout: number, payoutDecimals: number): number | null {
+  if (due <= 0 || payout <= 0) return null;
+  const num = BigInt(payout) * 10n ** BigInt(decimals) * BigInt(RATE_SCALE);
+  const den = BigInt(due) * 10n ** BigInt(payoutDecimals);
+  return Number(divRound(num, den));
 }
