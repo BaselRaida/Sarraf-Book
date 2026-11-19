@@ -1,4 +1,4 @@
-import { createContext, forwardRef, useCallback, useContext, useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
+import { Fragment, createContext, forwardRef, useCallback, useContext, useEffect, useRef, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { useData } from '../data';
 import { nonZero, type Amounts } from '../lib/aggregate';
 
@@ -133,6 +133,25 @@ export function DateField({ value, onChange, label = 'التاريخ والوق�
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * سطر تفاصيل مثل «USDT · اليوم 2:13 م»: كل جزء معزول باتجاهه (bdi)
+ * حتى لا تختلط الكلمات اللاتينية والأرقام مع العربية فتظهر مقلوبة.
+ */
+export function Meta({ items, className }: { items: (ReactNode | false | null | undefined | '')[]; className?: string }) {
+  const list = items.filter((x) => x !== false && x != null && x !== '');
+  return (
+    <span className={className}>
+      {list.map((x, i) => (
+        <Fragment key={i}>
+          {i > 0 && <span className="mx-1 opacity-60">·</span>}
+          {/* كل جزء كتلة واحدة: ينتقل كاملاً للسطر التالي بدل أن ينكسر */}
+          <bdi className="inline-block max-w-full truncate whitespace-nowrap align-bottom">{x}</bdi>
+        </Fragment>
+      ))}
+    </span>
   );
 }
 

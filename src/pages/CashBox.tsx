@@ -4,9 +4,9 @@ import { db } from '../db/db';
 import { addCashMovement, exchangeCash, recordCount } from '../db/ops';
 import { useData } from '../data';
 import { cashBalances } from '../lib/aggregate';
-import { fmtDateTime, fromLocalInput, toLocalInput } from '../lib/dates';
+import { fmtDateTime, fmtSmart, fromLocalInput, toLocalInput } from '../lib/dates';
 import { formatRate, parseMoney, parseRate, convert, toInputString } from '../lib/money';
-import { Chips, DateField, DraftNotice, Empty, Field, Modal, Money, MoneyInput, PageTitle, cx, useToast } from '../components/ui';
+import { Chips, DateField, DraftNotice, Empty, Field, Meta, Modal, Money, MoneyInput, PageTitle, cx, useToast } from '../components/ui';
 import { Icon } from '../components/icons';
 import { useLedger } from '../hooks';
 import { useDraft } from '../lib/draft';
@@ -66,19 +66,19 @@ export default function CashBox() {
         {codes.map((code) => (
           <div key={code} className="card">
             <p className="text-xs text-muted">{cur(code).name}</p>
-            <Money value={bal[code] ?? 0} currency={code} className="text-2xl font-bold" />
+            <Money value={bal[code] ?? 0} currency={code} className="block text-lg font-bold sm:text-2xl" />
           </div>
         ))}
       </div>
 
       <div className="mt-4 grid grid-cols-3 gap-2">
-        <button className="btn-outline" onClick={() => setDialog('deposit')}>
+        <button className="btn-outline whitespace-nowrap px-2" onClick={() => setDialog('deposit')}>
           <Icon name="down" size={16} /> إيداع
         </button>
-        <button className="btn-outline" onClick={() => setDialog('withdraw')}>
+        <button className="btn-outline whitespace-nowrap px-2" onClick={() => setDialog('withdraw')}>
           <Icon name="up" size={16} /> سحب
         </button>
-        <button className="btn-outline" onClick={() => setDialog('exchange')}>
+        <button className="btn-outline whitespace-nowrap px-2" onClick={() => setDialog('exchange')}>
           <Icon name="swap" size={16} /> تحويل عملة
         </button>
       </div>
@@ -113,10 +113,7 @@ export default function CashBox() {
               <div key={m.id} className="flex items-center gap-3 px-4 py-2.5">
                 <div className="min-w-0 flex-1">
                   <p className="font-bold">{m.label}</p>
-                  <p className="truncate text-xs text-muted">
-                    {fmtDateTime(m.date)}
-                    {m.note ? ` · ${m.note}` : ''}
-                  </p>
+                  <Meta className="block text-xs leading-snug text-muted" items={[fmtSmart(m.date), m.note]} />
                 </div>
                 <Money value={m.amount} currency={m.currency} className={cx('font-semibold', m.amount > 0 ? 'text-income' : 'text-ink')} />
               </div>

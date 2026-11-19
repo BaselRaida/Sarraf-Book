@@ -4,9 +4,9 @@ import { useLedger } from '../hooks';
 import { useData } from '../data';
 import { findOrCreateCustomer } from '../db/ops';
 import { customerBalances, nonZero, summarize } from '../lib/aggregate';
-import { fmtDate } from '../lib/dates';
+import { fmtSmart } from '../lib/dates';
 import { normalizeDigits, parsePercent } from '../lib/money';
-import { Avatar, Chips, Empty, Field, Modal, MoneyInput, MoneyList, PageTitle, useToast } from '../components/ui';
+import { Avatar, Chips, Empty, Field, Meta, Modal, MoneyInput, MoneyList, PageTitle, useToast } from '../components/ui';
 import { Icon } from '../components/icons';
 
 export default function Customers() {
@@ -79,9 +79,7 @@ export default function Customers() {
                 <Avatar name={c.name} size={48} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-lg font-bold">{c.name}</p>
-                  <p className="truncate text-sm text-muted">
-                    <span className="num">{s.opCount}</span> عملية · آخرها {fmtDate(last)}
-                  </p>
+                  <Meta className="block text-sm leading-snug text-muted" items={[<><span className="num">{s.opCount}</span> عملية</>, <>آخرها {fmtSmart(last)}</>]} />
                 </div>
                 <div className="text-end text-sm">
                   {owed.length > 0 ? (

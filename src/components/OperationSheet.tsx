@@ -6,7 +6,7 @@ import { cancelOperation } from '../db/ops';
 import { useData } from '../data';
 import { fmtDateTime } from '../lib/dates';
 import { formatPercent, formatRate } from '../lib/money';
-import { Avatar, CancelledBadge, Field, Modal, Money, useToast } from './ui';
+import { Avatar, CancelledBadge, Field, Meta, Modal, Money, useToast } from './ui';
 import { Icon } from './icons';
 
 const ACTIONS: Record<string, string> = { 'op-create': 'إنشاء', 'op-update': 'تعديل', 'op-cancel': 'إلغاء' };
@@ -126,20 +126,22 @@ export default function OperationSheet({ id, onClose }: { id: string | null; onC
                 <Money value={p.payoutAmount} currency={p.payoutCurrency} className="text-lg font-bold" />
                 {p.status === 'cancelled' ? <CancelledBadge /> : <span className="text-sm text-muted">{p.kind ? `${p.kind} · ` : ''}{p.method}</span>}
               </div>
-              <p className="text-sm text-muted">
-                {p.rate ? (
-                  <>
-                    بسعر <span className="num">{formatRate(p.rate)}</span> ·{' '}
-                  </>
-                ) : null}
-                {fmtDateTime(p.date)}
-                {p.fxProfit ? (
-                  <>
-                    {' '}
-                    · ربح فرق السعر <Money value={p.fxProfit} currency={p.payoutCurrency} tone="income" />
-                  </>
-                ) : null}
-              </p>
+              <Meta
+                className="block text-sm text-muted"
+                items={[
+                  fmtDateTime(p.date),
+                  p.rate && (
+                    <>
+                      السعر <span className="num">{formatRate(p.rate)}</span>
+                    </>
+                  ),
+                  !!p.fxProfit && (
+                    <>
+                      ربح فرق السعر <Money value={p.fxProfit} currency={p.payoutCurrency} tone="income" />
+                    </>
+                  ),
+                ]}
+              />
             </div>
           ))}
         </div>

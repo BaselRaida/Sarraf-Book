@@ -5,10 +5,10 @@ import { db } from '../db/db';
 import { useData } from '../data';
 import { useLedger } from '../hooks';
 import { cashBalances, customerBalances, dailyProfit, nonZero, summarize, totalOwed } from '../lib/aggregate';
-import { addDays, fmtDate, fmtTime, localDay } from '../lib/dates';
+import { addDays, fmtDate, fmtSmart, localDay } from '../lib/dates';
 import { formatMoney } from '../lib/money';
 import { listDrafts } from '../lib/draft';
-import { Avatar, Chips, Empty, Money, MoneyList, cx } from '../components/ui';
+import { Avatar, Chips, Empty, Meta, Money, MoneyList, cx } from '../components/ui';
 import { BarChart } from '../components/BarChart';
 import { Icon } from '../components/icons';
 import OperationSheet from '../components/OperationSheet';
@@ -239,9 +239,7 @@ export default function Home() {
                 <Avatar name={o.customerName} size={40} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-bold">{o.customerName}</p>
-                  <p className="truncate text-sm text-muted">
-                    {o.method} · {localDay(o.date) === today ? fmtTime(o.date) : fmtDate(o.date)}
-                  </p>
+                  <Meta className="block text-sm leading-snug text-muted" items={[fmtSmart(o.date), o.method]} />
                 </div>
                 <div className="text-end">
                   <Money value={o.amount} currency={o.currency} className="block font-bold" />

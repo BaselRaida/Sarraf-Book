@@ -53,7 +53,7 @@ interface Form {
 }
 
 /** بطاقة قسم برأس ملوّن ورقم الخطوة */
-function Step({ n, title, icon, tone, children, aside }: { n: number; title: string; icon: string; tone: 'in' | 'out' | 'plain'; children: ReactNode; aside?: ReactNode }) {
+function Step({ title, icon, tone, children, aside }: { title: string; icon: string; tone: 'in' | 'out' | 'plain'; children: ReactNode; aside?: ReactNode }) {
   const toneCls = tone === 'in' ? 'bg-income/12 text-income' : tone === 'out' ? 'bg-gold/20 text-pending-ink dark:text-gold' : 'bg-primary/10 text-primary-2 dark:text-gold';
   return (
     <section className="card space-y-4">
@@ -61,10 +61,7 @@ function Step({ n, title, icon, tone, children, aside }: { n: number; title: str
         <span className={cx('flex h-9 w-9 shrink-0 items-center justify-center rounded-full', toneCls)}>
           <Icon name={icon} size={19} />
         </span>
-        <h2 className="flex-1 text-[17px] font-bold">
-          <span className="num me-1.5 text-sm font-semibold text-muted">{n}.</span>
-          {title}
-        </h2>
+        <h2 className="flex-1 text-[17px] font-bold">{title}</h2>
         {aside}
       </div>
       {children}
@@ -434,11 +431,11 @@ export default function NewOperation() {
           </section>
 
           {/* ١. وصلني */}
-          <Step n={1} title="وصلني من الزبون" icon="inbox" tone="in">
+          <Step title="وصلني من الزبون" icon="inbox" tone="in">
             <Field label="كم وصلك؟" error={err('amount')}>
               <div className="relative">
-                <MoneyInput ref={amountRef} value={f.amount} onChange={(e) => set('amount', e.target.value)} placeholder="0" className="pe-16 text-3xl font-bold" />
-                <span className="pointer-events-none absolute end-4 top-1/2 -translate-y-1/2 text-base font-semibold text-muted">{sym(f.currency)}</span>
+                <MoneyInput ref={amountRef} value={f.amount} onChange={(e) => set('amount', e.target.value)} placeholder="0" className="pr-20 text-3xl font-bold" />
+                <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-base font-semibold text-muted" dir="ltr">{sym(f.currency)}</span>
               </div>
             </Field>
             <div>
@@ -457,7 +454,6 @@ export default function NewOperation() {
 
           {/* ٢. عمولتي */}
           <Step
-            n={2}
             title="عمولتي"
             icon="chart"
             tone="plain"
@@ -488,7 +484,7 @@ export default function NewOperation() {
           </Step>
 
           {/* ٣. حوّلت له */}
-          <Step n={3} title="حوّلت للزبون" icon="send" tone="out">
+          <Step title="حوّلت للزبون" icon="send" tone="out">
             <Chips
               value={f.payMode}
               onChange={(v) => setF((s) => ({ ...s, payMode: v, payAmount: v === s.payMode ? s.payAmount : '' }))}
@@ -650,8 +646,8 @@ export default function NewOperation() {
       </div>
 
       {/* شريط الحفظ الثابت على الجوال */}
-      <div className="sticky bottom-[92px] z-20 mt-4 md:hidden">
-        <div className="flex items-center gap-3 rounded-3xl border border-card-border bg-card/95 p-2 ps-4 shadow-lg backdrop-blur">
+      <div className="sticky bottom-[112px] z-20 mt-4 md:hidden">
+        <div className="flex items-center gap-3 rounded-3xl border border-card-border bg-card p-2 ps-4 shadow-[0_8px_24px_-8px_rgb(var(--shadow)/0.35)]">
           <div className="min-w-0 flex-1 leading-tight">
             <p className="text-xs text-muted">ربحي</p>
             <Money value={commission} currency={f.currency} tone="income" className="font-bold" />

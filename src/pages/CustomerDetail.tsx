@@ -5,10 +5,10 @@ import { db } from '../db/db';
 import { cancelPayment, updateCustomer } from '../db/ops';
 import { useData } from '../data';
 import { customerBalances, nonZero, summarize } from '../lib/aggregate';
-import { fmtDateTime } from '../lib/dates';
+import { fmtSmart } from '../lib/dates';
 import { formatPercent, formatRate, parsePercent } from '../lib/money';
 import type { Operation, Payment } from '../lib/types';
-import { Avatar, CancelledBadge, Empty, Field, Modal, Money, MoneyInput, MoneyList, cx, useToast } from '../components/ui';
+import { Avatar, CancelledBadge, Empty, Field, Meta, Modal, Money, MoneyInput, MoneyList, cx, useToast } from '../components/ui';
 import { Icon } from '../components/icons';
 import OperationSheet from '../components/OperationSheet';
 import PaymentSheet from '../components/PaymentSheet';
@@ -126,20 +126,32 @@ export default function CustomerDetail() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-bold">{e.op.kind || 'استلمت'} · {e.op.method}</p>
+                      <Meta className="block font-bold" items={['وصلني', e.op.method, e.op.kind]} />
                       {e.op.status === 'cancelled' && <CancelledBadge />}
                     </div>
-                    <p className="text-sm text-muted">{fmtDateTime(e.op.date)}</p>
+                    <Meta className="block text-sm text-muted" items={[fmtSmart(e.op.date), e.op.reference && <span className="num">{e.op.reference}</span>]} />
                     {(d.linked.get(e.op.id) ?? [])
                       .filter((p) => p.status === 'active')
                       .map((p) => (
-                        <p key={p.id} className="text-sm font-bold text-primary-2 dark:text-gold">
-                          ← حوّلت <Money value={p.payoutAmount} currency={p.payoutCurrency} /> {p.method}
-                          {p.rate ? <span className="num text-muted"> @{formatRate(p.rate)}</span> : null}
-                        </p>
+                        <div key={p.id} className="mt-1.5 rounded-xl bg-primary/5 px-2.5 py-1.5 text-sm dark:bg-gold/10">
+                          <p className="font-semibold text-primary-2 dark:text-gold">
+                            ⬆ حوّلت له <Money value={p.payoutAmount} currency={p.payoutCurrency} className="font-bold" />
+                          </p>
+                          <Meta
+                            className="block text-xs leading-snug text-muted"
+                            items={[
+                              p.method,
+                              p.rate && (
+                                <>
+                                  السعر <span className="num">{formatRate(p.rate)}</span>
+                                </>
+                              ),
+                            ]}
+                          />
+                        </div>
                       ))}
                   </div>
-                  <div className="text-end">
+                  <div className="shrink-0 text-end">
                     <Money value={e.op.amount} currency={e.op.currency} className="block text-lg font-bold" />
                     <Money value={e.op.commission} currency={e.op.currency} tone="income" className="text-sm font-bold" />
                   </div>
@@ -151,21 +163,17 @@ export default function CustomerDetail() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="font-bold">{e.pay.kind || 'حوّلت له'} · {e.pay.method}</p>
+                      <Meta className="block font-bold" items={['حوّلت له', e.pay.method, e.pay.kind]} />
                       {e.pay.status === 'cancelled' && <CancelledBadge />}
                     </div>
-                    <p className="text-sm text-muted">
-                      {fmtDateTime(e.pay.date)}
-                      {e.pay.rate ? <span className="num"> · @{formatRate(e.pay.rate)}</span> : null}
-                      {e.pay.notes ? ` · ${e.pay.notes}` : ''}
-                    </p>
+                    <Meta className="block text-sm text-muted" items={[fmtSmart(e.pay.date), e.pay.rate && <>السعر <span className="num">{formatRate(e.pay.rate)}</span></>, e.pay.notes]} />
                     {e.pay.status === 'active' && (
                       <button className="mt-1 text-xs font-medium text-muted underline" onClick={() => setCancelPay(e.pay)}>
                         إلغاء الدفعة
                       </button>
                     )}
                   </div>
-                  <Money value={e.pay.payoutAmount} currency={e.pay.payoutCurrency} className="text-lg font-bold" />
+                  <Money value={e.pay.payoutAmount} currency={e.pay.payoutCurrency} className="shrink-0 text-lg font-bold" />
                 </div>
               ),
             )}

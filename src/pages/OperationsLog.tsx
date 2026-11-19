@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useLedger } from '../hooks';
 import { useData } from '../data';
-import { endOfDay, fmtDateTime, startOfDay } from '../lib/dates';
+import { endOfDay, fmtSmart, startOfDay } from '../lib/dates';
 import { normalizeDigits } from '../lib/money';
-import { Avatar, CancelledBadge, Chips, Empty, Money, PageTitle, cx } from '../components/ui';
+import { Avatar, CancelledBadge, Chips, Empty, Meta, Money, PageTitle, cx } from '../components/ui';
 import { Icon } from '../components/icons';
 import OperationSheet from '../components/OperationSheet';
 
@@ -62,7 +62,7 @@ export default function OperationsLog() {
       <div className="mb-3 flex gap-2">
         <div className="relative flex-1">
           <Icon name="search" size={20} className="pointer-events-none absolute start-4 top-1/2 -translate-y-1/2 text-muted" />
-          <input className="input ps-12" placeholder="بحث بالزبون أو النوع أو الرقم المرجعي" value={q} onChange={(e) => setQ(e.target.value)} type="search" />
+          <input className="input ps-12" placeholder="بحث بالاسم أو الرقم أو النوع" value={q} onChange={(e) => setQ(e.target.value)} type="search" />
         </div>
         <button className={cx('btn-outline relative px-4', showFilters && 'border-primary')} onClick={() => setShowFilters((s) => !s)} aria-label="فلترة">
           <Icon name="filter" size={20} />
@@ -136,9 +136,7 @@ export default function OperationsLog() {
                     <p className={cx('truncate text-base font-bold', o.status === 'cancelled' && 'line-through')}>{o.customerName}</p>
                     {o.status === 'cancelled' && <CancelledBadge />}
                   </div>
-                  <p className="truncate text-sm text-muted">
-                    {o.kind ? `${o.kind} · ` : ''}{o.method} · {fmtDateTime(o.date)}
-                  </p>
+                  <Meta className="block text-sm leading-snug text-muted" items={[fmtSmart(o.date), o.method, o.kind]} />
                   {remaining > 0 && (
                     <p className="text-xs font-bold text-pending-ink">
                       باقٍ له <Money value={remaining} currency={o.currency} />
