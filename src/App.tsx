@@ -38,7 +38,7 @@ function Shell({ onLock, canLock }: { onLock: () => void; canLock: boolean }) {
       <header className="hero no-print sticky top-0 z-30">
         <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
           <NavLink to="/" className="flex items-center gap-2.5">
-            <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" className="h-9 w-9 rounded-[10px] shadow-sm ring-1 ring-white/25" />
+            <img src={`${import.meta.env.BASE_URL}icon-v2.svg`} alt="" className="h-9 w-9 rounded-[10px] shadow-sm ring-1 ring-white/25" />
             <span className="text-lg font-bold">صرّاف بوك</span>
           </NavLink>
           <nav className="ms-6 hidden gap-1 md:flex">

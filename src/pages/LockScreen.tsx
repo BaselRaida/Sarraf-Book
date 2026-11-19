@@ -51,7 +51,7 @@ export default function LockScreen({ pin, onUnlock }: { pin: PinRecord; onUnlock
 
   return (
     <div className="hero flex min-h-dvh flex-col items-center justify-center gap-6 px-6">
-      <img src={`${import.meta.env.BASE_URL}icon.svg`} alt="" className="h-16 w-16 rounded-2xl shadow-lg" />
+      <img src={`${import.meta.env.BASE_URL}icon-v2.svg`} alt="" className="h-16 w-16 rounded-2xl shadow-lg" />
       <div className="text-center">
         <h1 className="text-2xl font-bold">صرّاف بوك</h1>
         <p className="mt-1 text-sm opacity-80">{waiting ? `محاولات كثيرة — انتظر ${Math.ceil((waitUntil - Date.now()) / 1000)} ثانية` : 'أدخل رمز PIN'}</p>
