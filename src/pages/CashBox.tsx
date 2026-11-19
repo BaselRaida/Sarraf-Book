@@ -6,9 +6,10 @@ import { useData } from '../data';
 import { cashBalances } from '../lib/aggregate';
 import { fmtDateTime, fromLocalInput, toLocalInput } from '../lib/dates';
 import { formatRate, parseMoney, parseRate, convert, toInputString } from '../lib/money';
-import { Chips, DateField, Empty, Field, Modal, Money, MoneyInput, PageTitle, cx, useToast } from '../components/ui';
+import { Chips, DateField, DraftNotice, Empty, Field, Modal, Money, MoneyInput, PageTitle, cx, useToast } from '../components/ui';
 import { Icon } from '../components/icons';
 import { useLedger } from '../hooks';
+import { useDraft } from '../lib/draft';
 import type { MovementType } from '../lib/types';
 
 const TYPE_LABEL: Record<MovementType, string> = {
@@ -163,10 +164,23 @@ function MoveDialog({ type, onClose, balances: bal }: { type: 'deposit' | 'withd
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [date, setDate] = useState(toLocalInput());
+  const dv = useMemo(() => ({ currency, amount, note, date }), [currency, amount, note, date]);
+  const draft = useDraft<typeof dv>(
+    'cash-' + type,
+    dv,
+    (d) => {
+      setCurrency(d.currency);
+      setAmount(d.amount);
+      setNote(d.note);
+      setDate(d.date);
+    },
+    (d) => !!(d && (d.amount.trim() || d.note.trim())),
+  );
   const v = parseMoney(amount, cur(currency).decimals);
   const save = async () => {
     if (!v || v <= 0) return toast('أدخل مبلغاً صحيحاً', 'error');
     await addCashMovement(type, currency, v, note.trim(), fromLocalInput(date));
+    draft.clear();
     toast(type === 'deposit' ? 'تم الإيداع' : 'تم السحب');
     onClose();
   };
@@ -181,6 +195,15 @@ function MoveDialog({ type, onClose, balances: bal }: { type: 'deposit' | 'withd
         </button>
       }
     >
+      <DraftNotice
+        at={draft.restoredAt}
+        onDiscard={() => {
+          draft.clear();
+          setAmount('');
+          setNote('');
+          setDate(toLocalInput());
+        }}
+      />
       <div className="space-y-4">
         <DateField value={date} onChange={setDate} />
         <Chips value={currency} onChange={setCurrency} options={activeCurrencies.map((c) => ({ value: c.code, label: c.name }))} />
@@ -205,6 +228,21 @@ function ExchangeDialog({ onClose, balances: bal }: { onClose: () => void; balan
   const [toAmount, setToAmount] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [date, setDate] = useState(toLocalInput());
+  const dv = useMemo(() => ({ from, to, amount, rate, toAmount, note, date }), [from, to, amount, rate, toAmount, note, date]);
+  const draft = useDraft<typeof dv>(
+    'cash-exchange',
+    dv,
+    (d) => {
+      setFrom(d.from);
+      setTo(d.to);
+      setAmount(d.amount);
+      setRate(d.rate);
+      setToAmount(d.toAmount);
+      setNote(d.note);
+      setDate(d.date);
+    },
+    (d) => !!(d && (d.amount.trim() || d.rate.trim() || d.note.trim())),
+  );
   const fa = parseMoney(amount, cur(from).decimals);
   const r = parseRate(rate);
   const computed = fa && r ? convert(fa, cur(from).decimals, cur(to).decimals, r) : null;
@@ -214,6 +252,7 @@ function ExchangeDialog({ onClose, balances: bal }: { onClose: () => void; balan
     if (!fa || fa <= 0 || !ta || ta <= 0) return toast('أكمل المبالغ', 'error');
     try {
       await exchangeCash(from, fa, to, ta, note.trim() || (r ? `سعر ${formatRate(r)}` : ''), fromLocalInput(date));
+      draft.clear();
       toast('تم تحويل العملة');
       onClose();
     } catch (e) {
@@ -231,6 +270,17 @@ function ExchangeDialog({ onClose, balances: bal }: { onClose: () => void; balan
         </button>
       }
     >
+      <DraftNotice
+        at={draft.restoredAt}
+        onDiscard={() => {
+          draft.clear();
+          setAmount('');
+          setRate('');
+          setToAmount(null);
+          setNote('');
+          setDate(toLocalInput());
+        }}
+      />
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
           <DateField value={date} onChange={setDate} />
@@ -287,6 +337,18 @@ function CountDialog({ onClose, balanceAt, codes }: { onClose: () => void; balan
   const [adjust, setAdjust] = useState(true);
   const [note, setNote] = useState('');
   const [date, setDate] = useState(toLocalInput());
+  const dv = useMemo(() => ({ actual, adjust, note, date }), [actual, adjust, note, date]);
+  const draft = useDraft<typeof dv>(
+    'cash-count',
+    dv,
+    (d) => {
+      setActual(d.actual);
+      setAdjust(d.adjust);
+      setNote(d.note);
+      setDate(d.date);
+    },
+    (d) => !!(d && (Object.values(d.actual).some((x) => x.trim()) || d.note.trim())),
+  );
   const iso = fromLocalInput(date);
   const bal = balanceAt(iso);
 
@@ -303,6 +365,7 @@ function CountDialog({ onClose, balanceAt, codes }: { onClose: () => void; balan
     if (invalid) return toast('يوجد مبلغ غير صالح', 'error');
     if (entered.length === 0) return toast('أدخل المبلغ الفعلي لعملة واحدة على الأقل', 'error');
     for (const r of entered) await recordCount(r.code, r.expected, r.a!, note.trim(), adjust, iso);
+    draft.clear();
     const off = entered.filter((r) => r.diff !== 0).length;
     toast(off === 0 ? 'الجرد مطابق ✓' : `سُجّل الجرد — يوجد فرق في ${off} عملة`);
     onClose();
@@ -319,6 +382,15 @@ function CountDialog({ onClose, balanceAt, codes }: { onClose: () => void; balan
         </button>
       }
     >
+      <DraftNotice
+        at={draft.restoredAt}
+        onDiscard={() => {
+          draft.clear();
+          setActual({});
+          setNote('');
+          setDate(toLocalInput());
+        }}
+      />
       <p className="mb-3 text-sm text-muted">عُدّ النقد الموجود فعلياً وأدخله. يظهر الفرق مقارنة بالرصيد المحسوب حتى التاريخ المختار.</p>
       <div className="space-y-3">
         <DateField label="جرد حتى" value={date} onChange={setDate} />

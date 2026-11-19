@@ -7,6 +7,7 @@ import { useLedger } from '../hooks';
 import { cashBalances, customerBalances, dailyProfit, nonZero, summarize, totalOwed } from '../lib/aggregate';
 import { addDays, fmtDate, fmtTime, localDay } from '../lib/dates';
 import { formatMoney } from '../lib/money';
+import { listDrafts } from '../lib/draft';
 import { Avatar, Chips, Empty, Money, MoneyList, cx } from '../components/ui';
 import { BarChart } from '../components/BarChart';
 import { Icon } from '../components/icons';
@@ -16,7 +17,8 @@ const WEEKDAY = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { weekday: 'short' })
 
 export default function Home() {
   const { cur, activeCurrencies } = useData();
-  const { ready, ops, payments, movements } = useLedger();
+  const { ready, ops, payments, movements, customers } = useLedger();
+  const [drafts] = useState(() => listDrafts());
   const lastBackup = useLiveQuery(async () => (await db.settings.get('lastBackupAt'))?.value as string | undefined, []);
   const [openOp, setOpenOp] = useState<string | null>(null);
   const today = localDay();
@@ -62,6 +64,18 @@ export default function Home() {
   const backupDays = lastBackup ? Math.floor((Date.now() - new Date(lastBackup).getTime()) / 86_400_000) : null;
   const needBackup = ops.length > 0 && (backupDays == null || backupDays >= 7);
   const cashList = nonZero(d.cash);
+  // أعمال بدأتها ولم تحفظها
+  const draftLinks = drafts
+    .map((dr) => {
+      if (dr.key === 'new-operation') return { key: dr.key, to: '/new', label: 'عملية جديدة لم تُحفظ بعد' };
+      if (dr.key.startsWith('payment:')) {
+        const c = customers.find((x) => x.id === dr.key.slice(8));
+        return c ? { key: dr.key, to: `/customers/${c.id}`, label: `تحويل لـ ${c.name} لم يُحفظ (اضغط «تحويل له»)` } : null;
+      }
+      if (dr.key.startsWith('cash-')) return { key: dr.key, to: '/cash', label: 'حركة صندوق لم تُحفظ' };
+      return null;
+    })
+    .filter((x): x is { key: string; to: string; label: string } => !!x);
 
   return (
     <div className="space-y-5">
@@ -69,6 +83,14 @@ export default function Home() {
         <p className="text-sm font-medium text-muted">{fmtDate(new Date().toISOString())}</p>
         <h1 className="text-2xl font-bold">ملخص اليوم</h1>
       </div>
+
+      {draftLinks.map((dl) => (
+        <Link key={dl.key} to={dl.to} className="flex items-center gap-3 rounded-3xl border border-gold/50 bg-card px-4 py-3 text-sm shadow-sm">
+          <span className="text-lg">📝</span>
+          <span className="flex-1 font-semibold">{dl.label}</span>
+          <span className="font-semibold text-primary-2 dark:text-gold">أكمل ←</span>
+        </Link>
+      ))}
 
       {needBackup && (
         <Link to="/settings#backup" className="flex items-center gap-3 rounded-3xl bg-pending-bg px-4 py-3 text-sm font-bold text-pending-ink">

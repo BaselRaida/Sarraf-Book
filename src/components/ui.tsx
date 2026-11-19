@@ -136,6 +136,23 @@ export function DateField({ value, onChange, label = 'التاريخ والوق�
   );
 }
 
+/** تنبيه «استرجعنا ما كتبته» مع زر مسح */
+export function DraftNotice({ at, onDiscard }: { at: string | null; onDiscard: () => void }) {
+  if (!at) return null;
+  const t = new Intl.DateTimeFormat('ar-EG-u-nu-latn', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(at));
+  return (
+    <div className="mb-4 flex items-center gap-3 rounded-2xl bg-pending-bg px-3 py-2.5 text-sm text-pending-ink">
+      <span>📝</span>
+      <p className="flex-1 font-medium">
+        استرجعنا ما كتبته ولم تحفظه <span className="num opacity-80">({t})</span>
+      </p>
+      <button type="button" className="shrink-0 rounded-xl bg-white/60 px-3 py-1 font-semibold dark:bg-black/20" onClick={onDiscard}>
+        مسح
+      </button>
+    </div>
+  );
+}
+
 /** نافذة منبثقة: لوح سفلي على الجوال، ونافذة في الوسط على الشاشات الكبيرة */
 export function Modal({ open, onClose, title, children, footer, wide }: { open: boolean; onClose: () => void; title: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   useEffect(() => {

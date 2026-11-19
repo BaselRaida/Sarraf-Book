@@ -6,7 +6,8 @@ import { createOperation, ensureMethod, updateCustomer, updateOperation, type Op
 import { useData } from '../data';
 import { customerBalances } from '../lib/aggregate';
 import { calcPayout, commissionOf, type PayoutMode } from '../lib/calc';
-import { fromLocalInput, toLocalInput } from '../lib/dates';
+import { fmtDateTime, fromLocalInput, toLocalInput } from '../lib/dates';
+import { useDraft } from '../lib/draft';
 import { FX_MEMORY_KEY, recallRate, rememberRate, type FxMemory } from '../lib/fxMemory';
 import { formatPercent, formatRate, normalizeDigits, parseMoney, parsePercent, parseRate, toInputString } from '../lib/money';
 import type { CommissionMode, Customer } from '../lib/types';
@@ -99,6 +100,30 @@ export default function NewOperation() {
   const [dateTouched, setDateTouched] = useState(false); // تاريخ اختاره المستخدم (إدخال بأثر رجعي)
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((s) => ({ ...s, [k]: v }));
 
+  // ─── المسودة: ما يُكتب يُحفظ فوراً على الجهاز ولا يضيع قبل الضغط على «حفظ» ───
+  const draftValue = useMemo(() => ({ f, dateTouched, more, showMarket }), [f, dateTouched, more, showMarket]);
+  const draft = useDraft(
+    'new-operation',
+    draftValue,
+    (d) => {
+      setF((s) => ({ ...s, ...d.f }));
+      setDateTouched(!!d.dateTouched);
+      setMore(!!d.more);
+      setShowMarket(!!d.showMarket);
+    },
+    (d) => !!(d?.f && (d.f.customer.trim() || d.f.amount.trim() || d.f.reference.trim() || d.f.notes.trim() || d.f.partial.trim())),
+    !editing,
+  );
+  const discardDraft = () => {
+    draft.clear();
+    setF(blank());
+    setDateTouched(false);
+    setMore(false);
+    setShowMarket(false);
+    setSubmitted(false);
+    customerRef.current?.focus();
+  };
+
   /** يملأ سعر الصرف من آخر استخدام لنفس زوج العملات */
   const withRate = (s: Form): Form => {
     if (s.payCurrency === s.currency) return { ...s, rate: '', marketRate: '' };
@@ -111,6 +136,7 @@ export default function NewOperation() {
   useEffect(() => {
     if (editing || initRef.current || !fxMemo || !customers) return;
     initRef.current = true;
+    if (draft.restoredAt) return; // مسودة مسترجعة: نتركها كما كتبها المستخدم
     const preId = params.get('customer');
     const pre = preId ? customers.find((c) => c.id === preId) : undefined;
     setF((s) => {
@@ -262,6 +288,7 @@ export default function NewOperation() {
           payoutCurrency: { ...(prefs.payoutCurrency ?? {}), [f.currency]: f.payCurrency },
           payoutMethod: f.payMode !== 'later' ? f.payMethod : prefs.payoutMethod,
         });
+        draft.clear();
         toast(`حُفظت عملية ${name} ✓`);
         // التاريخ المختار يدوياً يبقى للعملية التالية (لتسهيل إدخال الحركات القديمة)
         setF({ ...blank(), currency: f.currency, kind: f.kind, method: f.method.trim(), payCurrency: f.payCurrency, payKind: f.payKind, payMethod: f.payMethod.trim(), rate: f.rate, marketRate: f.marketRate, date: dateTouched ? f.date : toLocalInput() });
@@ -288,6 +315,17 @@ export default function NewOperation() {
   return (
     <form onSubmit={submit} noValidate className="mx-auto max-w-2xl">
       <PageTitle>{editing ? 'تعديل عملية' : 'عملية جديدة'}</PageTitle>
+      {!editing && draft.restoredAt && (
+        <div className="mb-4 flex items-center gap-3 rounded-3xl bg-pending-bg px-4 py-3 text-sm text-pending-ink">
+          <span className="text-lg">📝</span>
+          <p className="flex-1 font-medium">
+            استرجعنا ما كتبته ولم تحفظه <span className="num opacity-80">({fmtDateTime(draft.restoredAt)})</span>
+          </p>
+          <button type="button" className="shrink-0 rounded-xl bg-white/60 px-3 py-1.5 font-semibold dark:bg-black/20" onClick={discardDraft}>
+            مسح
+          </button>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-[1fr_280px]">
         <div className="space-y-4">

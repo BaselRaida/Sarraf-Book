@@ -6,10 +6,11 @@ import { useData } from '../data';
 import { nonZero, type Amounts } from '../lib/aggregate';
 import { calcPayout } from '../lib/calc';
 import { fromLocalInput, toLocalInput } from '../lib/dates';
+import { useDraft } from '../lib/draft';
 import { FX_MEMORY_KEY, recallRate, rememberRate, type FxMemory } from '../lib/fxMemory';
 import { formatRate, parseMoney, parseRate, toInputString } from '../lib/money';
 import type { Customer } from '../lib/types';
-import { Chips, DateField, Field, FreeChoice, Modal, Money, MoneyInput, useToast } from './ui';
+import { Chips, DateField, DraftNotice, Field, FreeChoice, Modal, Money, MoneyInput, useToast } from './ui';
 
 /** تسليم دفعة لزبون من رصيده (كامل الرصيد أو جزء، بأي عملة). */
 export default function PaymentSheet({ customer, balance, onClose }: { customer: Customer; balance: Amounts; onClose: () => void }) {
@@ -28,6 +29,26 @@ export default function PaymentSheet({ customer, balance, onClose }: { customer:
   const [date, setDate] = useState(toLocalInput());
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // المسودة لكل زبون: لا يضيع ما كُتب إن أُغلقت النافذة أو التطبيق
+  const draftValue = useMemo(() => ({ from, to, method, kind, full, rateStr, amountStr, date, notes }), [from, to, method, kind, full, rateStr, amountStr, date, notes]);
+  type D = typeof draftValue;
+  const draft = useDraft<D>(
+    'payment:' + customer.id,
+    draftValue,
+    (d) => {
+      setFrom(d.from);
+      setTo(d.to);
+      setMethod(d.method);
+      setKind(d.kind);
+      setFull(d.full);
+      setRateStr(d.rateStr);
+      setAmountStr(d.amountStr);
+      setDate(d.date);
+      setNotes(d.notes);
+    },
+    (d) => !!(d && ((!d.full && d.amountStr.trim()) || d.notes.trim() || d.kind.trim() || (d.from !== d.to && d.rateStr.trim()))),
+  );
 
   const fc = cur(from);
   const tc = cur(to);
@@ -64,6 +85,7 @@ export default function PaymentSheet({ customer, balance, onClose }: { customer:
         notes: notes.trim() || undefined,
       });
       if (!same && rate) await setSetting(FX_MEMORY_KEY, rememberRate(fxMemo, from, to, rate, null, new Date().toISOString()));
+      draft.clear();
       toast('سُجّلت الدفعة ✓');
       onClose();
     } catch (e) {
@@ -84,6 +106,17 @@ export default function PaymentSheet({ customer, balance, onClose }: { customer:
         </button>
       }
     >
+      <DraftNotice
+        at={draft.restoredAt}
+        onDiscard={() => {
+          draft.clear();
+          setAmountStr('');
+          setNotes('');
+          setKind('');
+          setFull(true);
+          setDate(toLocalInput());
+        }}
+      />
       <div className="space-y-4">
         <div>
           <span className="label">من رصيده بـ</span>
